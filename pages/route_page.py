@@ -193,3 +193,9 @@ class UrbanRoutesPage:
 
     def is_car_search_modal_visible(self) -> bool:
         return self._is_visible(self.CAR_SEARCH_MODAL)
+# wrapper class so tests can still import RoutePage
+class RoutePage(UrbanRoutesPage):
+    pass
+# wrapper class so tests can still import RoutePage
+class RoutePage(UrbanRoutesPage):
+    pass

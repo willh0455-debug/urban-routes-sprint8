@@ -7,7 +7,7 @@ from webdriver_manager.chrome import ChromeDriverManager
 def driver():
     service = Service(ChromeDriverManager().install())
     options = webdriver.ChromeOptions()
-    # options.add_argument("--headless=new")  # Uncomment if your reviewer needs headless
+    options.add_argument("--headless=new")  # Uncomment if your reviewer needs headless
     driver = webdriver.Chrome(service=service, options=options)
     driver.maximize_window()
     yield driver
