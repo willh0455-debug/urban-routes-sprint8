@@ -1,17 +1,3 @@
-import pytest
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-
-@pytest.fixture(scope="session")
-def driver():
-    service = Service(ChromeDriverManager().install())
-    options = webdriver.ChromeOptions()
-    # options.add_argument("--headless=new")  # Uncomment if your reviewer needs headless
-    driver = webdriver.Chrome(service=service, options=options)
-    driver.maximize_window()
-    yield driver
-    driver.quit()
 # tests/test_e2e_urban_routes.py
 from pages.route_page import RoutePage
 import data
@@ -20,28 +6,26 @@ import helpers
 def test_urban_routes_e2e(driver):
     page = RoutePage(driver)
 
-    # 1. Open the app
+    # 1) Open app
     page.open()
 
-    # 2. Enter route addresses
-    page.set_from_address(data.FROM_ADDRESS)
-    page.set_to_address(data.TO_ADDRESS)
-    page.wait_route_built()
+    # 2) Enter addresses (matches your POM: set_from / set_to)
+    page.set_from(data.FROM_ADDRESS)
+    page.set_to(data.TO_ADDRESS)
 
-    # 3. Select tariff
-    page.choose_tariff("Comfort")
+    # 3) Choose tariff (matches your POM: choose_supportive)
+    page.choose_supportive()
 
-    # 4. Add phone number and confirm
+    # 4) Phone flow: enter phone, then read code from performance logs
     page.enter_phone(data.PHONE)
-    code = helpers.retrieve_phone_code(data.PHONE)
-    page.enter_code(code)
-    page.confirm_phone()
+    code = helpers.retrieve_phone_code(driver)   # IMPORTANT: pass driver, not phone
+    page.enter_sms_code(code)
 
-    # 5. Add card
-    page.enter_card_details(data.CARD_NUMBER, data.CARD_EXP, data.CARD_CVV, data.CARD_NAME)
-    page.save_card()
+    # 5) Card flow: your POM has open_payment() + add_card(number, cvv)
+    page.open_payment()
+    page.add_card(data.CARD_NUMBER, data.CARD_CVV)
 
-    # 6. Request ride
-    page.order_taxi()
-    page.wait_for_driver()
-    page.assert_driver_searching()
+    # 6) Order taxi and assert the "driver searching" modal appears
+    page.click_order()
+    assert page.is_car_search_modal_visible(), "Driver search modal not visible"
+
