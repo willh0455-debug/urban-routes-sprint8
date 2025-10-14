@@ -1,14 +1,27 @@
 import pytest
 from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def driver():
-    service = Service(ChromeDriverManager().install())
-    options = webdriver.ChromeOptions()
-    options.add_argument("--headless=new")  # Uncomment if your reviewer needs headless
-    driver = webdriver.Chrome(service=service, options=options)
-    driver.maximize_window()
-    yield driver
-    driver.quit()
+    chrome_options = Options()
+
+    # Run Chrome in headless mode (needed for CI reviewers)
+    chrome_options.add_argument("--headless=new")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--window-size=1366,768")
+
+    # Create the driver
+    drv = webdriver.Chrome(options=chrome_options)
+    drv.set_page_load_timeout(30)
+    drv.implicitly_wait(0)  # use explicit waits instead of implicit
+
+    yield drv
+    drv.quit()
+
+@pytest.fixture
+def wait(driver):
+    """Provide a 10-second explicit WebDriverWait to all tests."""
+    return WebDriverWait(driver, 10)

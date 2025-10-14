@@ -1,0 +1,385 @@
+# pages/route_page.py
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.keys import Keys
+import data
+
+DEFAULT_TIMEOUT = 6  # short waits so failures don't "freeze"
+
+# Candidates; we also have a generic fallback to visible text inputs
+FROM_INPUT_CANDIDATES = [
+    (By.CSS_SELECTOR, "input[type='text']"),
+    (By.ID, "from"),
+    (By.NAME, "from"),
+    (By.CSS_SELECTOR, "input#from"),
+    (By.CSS_SELECTOR, "input[name='from']"),
+    (By.CSS_SELECTOR, "input[placeholder*='From']"),
+    (By.CSS_SELECTOR, "input[aria-label*='From']"),
+]
+
+TO_INPUT_CANDIDATES = [
+    (By.CSS_SELECTOR, "input[type='text']"),
+    (By.ID, "to"),
+    (By.NAME, "to"),
+    (By.CSS_SELECTOR, "input#to"),
+    (By.CSS_SELECTOR, "input[name='to']"),
+    (By.CSS_SELECTOR, "input[placeholder*='To']"),
+    (By.CSS_SELECTOR, "input[aria-label*='To']"),
+]
+
+
+class RoutePage:
+    # You will likely need to adjust these to real data-test/id/name values
+    SUGGESTION_TOP = (By.CSS_SELECTOR, ".suggest-item")
+
+    CALL_TAXI_BTN = (By.CSS_SELECTOR, "[data-test='call-taxi']")  # TODO
+
+    PHONE_FIELD = (By.CSS_SELECTOR, "input[name='phone']")        # TODO
+    SMS_CODE_INPUT = (By.CSS_SELECTOR, "input[name='code']")      # TODO
+    REQUEST_CODE_BTN = (By.CSS_SELECTOR, "[data-test='request-code'], button.request-code")
+
+    PAYMENT_METHOD_BTN = (By.CSS_SELECTOR, "[data-test='payment-method']")  # TODO
+    ADD_CARD_BTN = (By.CSS_SELECTOR, "[data-test='add-card']")              # TODO
+    CARD_NUMBER_INPUT = (By.CSS_SELECTOR, "input[name='cardNumber']")       # TODO
+    CARD_CVV_INPUT = (By.CSS_SELECTOR, "input[name='cardCode']")            # TODO
+    CARD_LINK_BTN = (By.CSS_SELECTOR, "[data-test='link-card']")            # TODO
+
+    ORDER_BTN = (By.CSS_SELECTOR, "[data-test='order']")          # TODO
+    CAR_SEARCH_MODAL = (By.CSS_SELECTOR, "#car-search-modal")     # TODO
+
+    def __init__(self, driver, timeout: int = DEFAULT_TIMEOUT):
+        self.driver = driver
+        self.wait = WebDriverWait(driver, timeout)
+
+    # ---------- helpers ----------
+    def _click(self, locator):
+        self.wait.until(EC.element_to_be_clickable(locator)).click()
+
+    def _type(self, locator, text: str, clear: bool = True, commit_with_enter: bool = False):
+        el = self.wait.until(EC.visibility_of_element_located(locator))
+        if clear:
+            el.clear()
+        el.send_keys(text)
+        if commit_with_enter:
+            el.send_keys(Keys.ENTER)
+
+    def _get_value(self, locator) -> str:
+        el = self.wait.until(EC.presence_of_element_located(locator))
+        return el.get_attribute("value") or el.text
+
+    def _is_visible(self, locator) -> bool:
+        try:
+            return self.wait.until(EC.visibility_of_element_located(locator)).is_displayed()
+        except Exception:
+            return False
+
+    def _maybe_switch_into_app_iframe(self):
+        # Try default content first; iframes are common in the sandbox
+        self.driver.switch_to.default_content()
+        iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
+        for f in iframes:
+            try:
+                self.driver.switch_to.frame(f)
+                if self.driver.find_elements(By.CSS_SELECTOR, "input"):
+                    return
+                self.driver.switch_to.default_content()
+            except Exception:
+                self.driver.switch_to.default_content()
+
+    def _visible_text_inputs(self):
+        self._maybe_switch_into_app_iframe()
+        candidates = self.driver.find_elements(By.CSS_SELECTOR, "input[type='text'], input:not([type])")
+        visible = []
+        for el in candidates:
+            try:
+                if el.is_displayed() and el.is_enabled():
+                    visible.append(el)
+            except Exception:
+                continue
+        return visible
+
+    def _find_first_visible(self, locators):
+        last_exc = None
+        for loc in locators:
+            try:
+                el = self.wait.until(EC.visibility_of_element_located(loc))
+                return el
+            except Exception as e:
+                last_exc = e
+                continue
+        if last_exc:
+            raise last_exc
+
+    # ---------- navigation ----------
+    def open(self):
+        url = getattr(data, "BASE_URL", getattr(data, "URBAN_ROUTES_URL", None))
+        assert url, "BASE_URL (or URBAN_ROUTES_URL) missing in data.py"
+        print("[POM] open:", url)
+        self.driver.get(url)
+        self.wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+        self._maybe_switch_into_app_iframe()
+        # dump page for debugging
+        try:
+            with open("/tmp/page.html", "w", encoding="utf-8") as f:
+                f.write(self.driver.page_source)
+            print("[POM] dumped /tmp/page.html")
+        except Exception as e:
+            print("[POM] dump failed:", e)
+        self._debug_dump_all_frames()
+        return self
+    def wait_route_built(self):
+        # Generic readiness; adjust to a specific route-ready selector if you have one
+        try:
+            self.wait.until(EC.element_to_be_clickable(self.CALL_TAXI_BTN))
+        except Exception:
+            # fall back to presence of any input
+            self._visible_text_inputs()
+        return self
+
+    # ---------- addresses ----------
+    def set_from(self, address: str):
+        print("[POM] set_from start")
+        self._maybe_switch_into_app_iframe()
+        # ensure at least 1 input quickly
+        self.wait.until(lambda d: len(self._visible_text_inputs()) >= 1)
+        try:
+            el = self._find_first_visible(FROM_INPUT_CANDIDATES)
+            print("[POM] set_from using candidate selector")
+            el.clear(); el.send_keys(address)
+        except Exception:
+            print("[POM] set_from fallback -> first visible input")
+            inputs = self._visible_text_inputs()
+            if not inputs:
+                raise Exception("No visible inputs found for FROM field")
+            el = inputs[0]
+            el.clear(); el.send_keys(address)
+        try:
+            self.wait.until(EC.visibility_of_element_located(self.SUGGESTION_TOP)).click()
+            print("[POM] set_from clicked suggestion")
+        except Exception:
+            print("[POM] set_from no suggestion")
+        return self
+
+    def set_to(self, address: str):
+        print("[POM] set_to start")
+        self._maybe_switch_into_app_iframe()
+        # ensure at least 2 inputs quickly
+        self.wait.until(lambda d: len(self._visible_text_inputs()) >= 2)
+        try:
+            el = self._find_first_visible(TO_INPUT_CANDIDATES)
+            print("[POM] set_to using candidate selector")
+            el.clear(); el.send_keys(address)
+        except Exception:
+            print("[POM] set_to fallback -> second visible input")
+            inputs = self._visible_text_inputs()
+            if len(inputs) < 2:
+                raise Exception(f"Not enough visible inputs for TO field. Found {len(inputs)}")
+            el = inputs[1]
+            el.clear(); el.send_keys(address)
+        try:
+            self.wait.until(EC.visibility_of_element_located(self.SUGGESTION_TOP)).click()
+            print("[POM] set_to clicked suggestion")
+        except Exception:
+            print("[POM] set_to no suggestion")
+        return self
+
+    # ---------- tariff ----------
+    def choose_supportive(self):
+        # TODO: click your real tariff if you have one
+        print("[POM] choose_supportive (stub)")
+        return self
+
+    # ---------- phone ----------
+    def enter_phone(self, phone: str):
+        print("[POM] enter_phone")
+        self._maybe_switch_into_app_iframe()
+        self._type(self.PHONE_FIELD, phone)
+        try:
+            self._click(self.REQUEST_CODE_BTN)
+            print("[POM] clicked request code button")
+        except Exception:
+            print("[POM] no explicit request-code button, continuing")
+        return self
+
+    def enter_sms_code(self, code: str):
+        print("[POM] enter_sms_code")
+        self._maybe_switch_into_app_iframe()
+        self._type(self.SMS_CODE_INPUT, code)
+        return self
+
+    # ---------- payment ----------
+    def open_payment(self):
+        print("[POM] open_payment")
+        self._maybe_switch_into_app_iframe()
+        self._click(self.PAYMENT_METHOD_BTN)
+        return self
+
+    def add_card(self, card_number: str, cvv: str):
+        print("[POM] add_card")
+        self._maybe_switch_into_app_iframe()
+        self._click(self.ADD_CARD_BTN)
+        self._type(self.CARD_NUMBER_INPUT, card_number)
+        self._type(self.CARD_CVV_INPUT, cvv)
+        self.driver.switch_to.active_element.send_keys(Keys.TAB)
+        self.wait.until(EC.element_to_be_clickable(self.CARD_LINK_BTN)).click()
+        return self
+
+    # ---------- order ----------
+    def click_order(self):
+        print("[POM] click_order")
+        self._maybe_switch_into_app_iframe()
+        self._click(self.ORDER_BTN)
+        return self
+
+    def is_car_search_modal_visible(self) -> bool:
+        self._maybe_switch_into_app_iframe()
+        return self._is_visible(self.CAR_SEARCH_MODAL)
+def _debug_dump_all_frames(self):
+    """Dump HTML of default content and each iframe, and print input counts."""
+    from pathlib import Path
+    # default content
+    try:
+        self.driver.switch_to.default_content()
+        html = self.driver.page_source
+        Path("/tmp/frame-0-default.html").write_text(html, encoding="utf-8")
+        inputs = self.driver.find_elements(By.CSS_SELECTOR, "input")
+        print(f"[DEBUG] default content: {len(inputs)} <input> elements")
+    except Exception as e:
+        print("[DEBUG] default content dump failed:", e)
+
+    # each iframe
+    iframes = self.driver.find_elements(By.TAG_NAME, "iframe")
+    print(f"[DEBUG] found {len(iframes)} iframes")
+    for idx, f in enumerate(iframes, start=1):
+        try:
+            self.driver.switch_to.default_content()
+            self.driver.switch_to.frame(f)
+            html = self.driver.page_source
+            Path(f"/tmp/frame-{idx}.html").write_text(html, encoding="utf-8")
+            inputs = self.driver.find_elements(By.CSS_SELECTOR, "input")
+            print(f"[DEBUG] frame {idx}: {len(inputs)} <input> elements")
+        except Exception as e:
+            print(f"[DEBUG] frame {idx} dump failed:", e)
+    # return to a likely app frame if any has inputs
+    self.driver.switch_to.default_content()
+    for f in self.driver.find_elements(By.TAG_NAME, "iframe"):
+        try:
+            self.driver.switch_to.frame(f)
+            if self.driver.find_elements(By.CSS_SELECTOR, "input"):
+                print("[DEBUG] switched into an iframe that has inputs")
+                return
+            self.driver.switch_to.default_content()
+        except Exception:
+            self.driver.switch_to.default_content()
+
+
+
+# ================= DEBUG + HELPERS + UPDATED set_from =================
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
+from selenium.common.exceptions import TimeoutException
+
+    def _debug_dump(self, html: str | None = None, label: str = "page"):
+        try:
+            if html is None:
+                html = self.driver.page_source
+            path = f"/tmp/{label}.html"
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(html)
+            print(f"[POM] dumped {path}")
+        except Exception as e:
+            print("[POM] dump failed:", e)
+            self._debug_dump_all_frames()
+
+    def _debug_dump_all_frames(self):
+        try:
+            from selenium.webdriver.common.by import By
+            self.driver.switch_to.default_content()
+            frames = self.driver.find_elements(By.CSS_SELECTOR, "iframe, frame")
+            for idx, fr in enumerate(frames):
+                try:
+                    self.driver.switch_to.default_content()
+                    self.driver.switch_to.frame(fr)
+                    html = self.driver.page_source
+                    with open(f"/tmp/frame-{idx}.html", "w", encoding="utf-8") as f:
+                        f.write(html)
+                    print(f"[POM] dumped /tmp/frame-{idx}.html")
+                except Exception as inner:
+                    print(f"[POM] frame dump {idx} failed:", inner)
+            self.driver.switch_to.default_content()
+        except Exception as outer:
+            print("[POM] _debug_dump_all_frames failed:", outer)
+
+def _visible_text_inputs(self):
+    inputs = self.driver.find_elements(
+        By.CSS_SELECTOR,
+        "input[type='text'], input[type='search'], input[role='combobox'], input[aria-autocomplete]"
+    )
+    return [el for el in inputs if el.is_displayed() and el.is_enabled()]
+
+def _find_in_all_frames(self, by, value):
+    self.driver.switch_to.default_content()
+    elements = self.driver.find_elements(by, value)
+    for el in elements:
+        if el.is_displayed() and el.is_enabled():
+            return el
+
+    frames = self.driver.find_elements(By.CSS_SELECTOR, "iframe, frame")
+    for fr in frames:
+        try:
+            self.driver.switch_to.default_content()
+            self.driver.switch_to.frame(fr)
+            elements = self.driver.find_elements(by, value)
+            for el in elements:
+                if el.is_displayed() and el.is_enabled():
+                    return el
+        except Exception:
+            pass
+    self.driver.switch_to.default_content()
+    return None
+
+    def set_from(self, value: str):
+        print("[POM] set_from start")
+        self.open()
+
+        candidate_selectors = [
+            (By.CSS_SELECTOR, "input#from"),
+            (By.CSS_SELECTOR, "input[name='from']"),
+            (By.CSS_SELECTOR, "[data-test='from'] input"),
+            (By.CSS_SELECTOR, "input[aria-label='From']"),
+            (By.CSS_SELECTOR, "input[placeholder*='From']"),
+        ]
+
+        field = None
+        for by, sel in candidate_selectors:
+            field = self._find_in_all_frames(by, sel)
+            if field:
+                break
+
+        if not field:
+            try:
+                self.wait.until(lambda d: len(self._visible_text_inputs()) >= 1)
+                field = self._find_in_all_frames(
+                    By.CSS_SELECTOR,
+                    "input[type='text'], input[type='search'], input[role='combobox'], input[aria-autocomplete]"
+                )
+            except TimeoutException:
+                self._debug_dump(label="page")
+                raise
+
+        if not field:
+            self._debug_dump(label="page")
+            self._debug_dump_all_frames()
+            raise TimeoutException("Could not locate the 'From' address field in page or frames.")
+
+        try:
+            field.click()
+            field.clear()
+        except Exception:
+            pass
+
+        field.send_keys(value)
+        field.send_keys(Keys.TAB)
+        print("[POM] set_from done")
+# ================= END BLOCK =================
