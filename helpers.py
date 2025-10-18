@@ -1,37 +1,65 @@
-# helpers.py
 
+
+# helpers.py
+# -----------------
 import re
-from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import TimeoutException
 
 
-def retrieve_phone_code(driver, timeout=10) -> str:
-    """
-    Very simple helper that looks for a visible place on the page where the
-    demo shows an SMS code, then extracts 4–6 consecutive digits.
-    Update just one of the locators below if your DOM is different.
-    """
-    wait = WebDriverWait(driver, timeout)
 
-    candidates = [
-        # any element whose text includes “SMS” and “code”
-        (By.XPATH, "//*[contains(translate(., 'SMSCODE', 'smscode'), 'sms') and contains(translate(., 'SMSCODE', 'smscode'), 'code')]"),
-        # common test hooks
-        (By.CSS_SELECTOR, "[data-testid='sms-code'], .sms-code, #sms-code"),
-    ]
 
-    blob = ""
-    for by_, sel in candidates:
-        try:
-            el = wait.until(EC.visibility_of_element_located((by_, sel)))
-            blob = (el.text or "").strip()
-            if blob:
-                break
-        except Exception:
-            continue
+def wait_and_type(driver, locator, text, timeout=10, clear=True):
+el = WebDriverWait(driver, timeout).until(EC.presence_of_element_located(locator))
+if clear:
+try:
+el.clear()
+except Exception:
+pass
+el.send_keys(text)
+return el
 
-    m = re.search(r"\b(\d{4,6})\b", blob) or re.search(r"\b(\d{4,6})\b", driver.page_source)
-    if not m:
-        raise RuntimeError("SMS code not found. Update helpers.retrieve_phone_code() locator.")
-    return m.group(1)
+
+
+
+def wait_and_click(driver, locator, timeout=10):
+el = WebDriverWait(driver, timeout).until(EC.element_to_be_clickable(locator))
+el.click()
+return el
+
+
+
+
+def get_value(driver, locator, timeout=10):
+el = WebDriverWait(driver, timeout).until(EC.presence_of_element_located(locator))
+try:
+return el.get_attribute("value") or el.text
+except Exception:
+return el.text
+
+
+
+
+def retrieve_phone_code(driver, timeout=15, expected_len=None):
+"""
+Best-effort retrieval of the SMS/OTP code from the page.
+This is intentionally generic since different cohorts use slightly different widgets.
+
+
+Strategy:
+1) Look for an input already split into boxes and just return once boxes are filled.
+2) Look for any element that visibly contains a 4–6 digit code (notifications, dev panel, etc.).
+3) If there's a specific data-testid or aria-label present, add it here.
+"""
+code_len = expected_len or globals().get("SMS_CODE_LEN", 4)
+
+
+# 2) Scan common containers for a 4-6 digit sequence
+patterns = [r"\b(\d{%d})\b" % code_len, r"\b(\d{4,6})\b"]
+buckets = [
+("//div[contains(@class,'notification') or contains(@class,'toast') or contains(@class,'modal')]",
+
+
+),
+raise TimeoutException("Could not automatically retrieve SMS code. If your app shows

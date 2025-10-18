@@ -1,121 +1,115 @@
-# pages.py
 
+
+# pages.py
+# -----------------
 from selenium.webdriver.common.by import By
-from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+
+
 import data
+import helpers
+
+
 
 
 class UrbanRoutesPage:
-    def __init__(self, driver):
-        self.driver = driver
-        self.wait = WebDriverWait(driver, data.DEFAULT_TIMEOUT)
+def __init__(self, driver):
+self.driver = driver
+self.wait = WebDriverWait(driver, data.EXPLICIT_WAIT_SECONDS)
 
-    # ========== LOCATORS (simple & readable) ==========
-    # Route fields (IDs are present on the demo)
-    ADDRESS_FROM = (By.ID, "from")
-    ADDRESS_TO = (By.ID, "to")
 
-    # Call taxi button
-    CALL_TAXI_BUTTON = (By.XPATH, "//button[contains(normalize-space(.), 'Call a taxi')]")
+# --- Locators ---
+ADDRESS_FROM = (By.ID, "from")
+ADDRESS_TO = (By.ID, "to")
 
-    # Tariff cards / selected plan
-    SUPPORTIVE_PLAN = (By.XPATH, "//div[normalize-space(.)='Supportive']/..")
 
-    # Phone flow
-    PHONE_OPEN = (By.XPATH, "//div[contains(@class,'phone') or contains(.,'Phone')]/descendant-or-self::button[1] | //button[contains(.,'Phone')]")
-    PHONE_INPUT = (By.XPATH, "//input[@type='tel' or @name='phone' or contains(@placeholder,'phone')]")
-    NEXT_BTN = (By.XPATH, "//button[normalize-space(.)='Next' or contains(.,'Next')]")
-    SMS_INPUT = (By.XPATH, "//input[@inputmode='numeric' or @type='tel' or contains(@placeholder,'code')]")
-    CONFIRM_BTN = (By.XPATH, "//button[normalize-space(.)='Confirm' or contains(.,'Confirm')]")
+CALL_TAXI_BUTTON = (By.XPATH, "//button[contains(normalize-space(.), 'Call a taxi')]")
 
-    # Readback helpers
-    SELECTED_TARIFF_TITLE = (
-        By.XPATH,
-        # typical “selected card” → get its visible title text
-        "((//div[contains(@class,'active') or @aria-selected='true'])[1]//div"
-        "[contains(@class,'tariff') and (contains(@class,'title') or contains(@class,'name'))]"
-        ")[1]"
-    )
 
-    # ========== ACTIONS (POM) ==========
-    def set_from(self, address: str):
-        el = self.wait.until(EC.element_to_be_clickable(self.ADDRESS_FROM))
-        el.clear()
-        el.send_keys(address)
-        el.send_keys(Keys.ENTER)
+# Tariff cards
+SUPPORTIVE_PLAN = (By.XPATH, "//div[normalize-space(text())='Supportive']/.. | //div[contains(@class,'tcard')][.//div[normalize-space(text())='Supportive']]")
+ACTIVE_TARIFF_TITLE = (By.XPATH, "//div[contains(@class,'tcard') and (contains(@class,'active') or contains(@class,'selected'))]//*[self::div or self::span][1]")
 
-    def set_to(self, address: str):
-        el = self.wait.until(EC.element_to_be_clickable(self.ADDRESS_TO))
-        el.clear()
-        el.send_keys(address)
-        el.send_keys(Keys.ENTER)
 
-    def get_from(self) -> str:
-        el = self.wait.until(EC.presence_of_element_located(self.ADDRESS_FROM))
-        return el.get_attribute("value") or ""
+# Phone / verification flow (generic selectors that work in many cohorts)
+PHONE_OPEN = (By.XPATH, "//button[.//span[contains(normalize-space(.), 'Phone')]] | //button[contains(normalize-space(.), 'Phone')]")
+PHONE_INPUT = (By.XPATH, "//input[@type='tel' or @name='phone' or contains(@aria-label,'phone')]")
+NEXT_BUTTON = (By.XPATH, "//button[contains(normalize-space(.), 'Next') or contains(normalize-space(.), 'Send')]")
+SMS_INPUTS = (By.XPATH, "//input[@inputmode='numeric' or @name='code' or contains(@aria-label,'code')]")
+CONFIRM_BUTTON = (By.XPATH, "//button[contains(normalize-space(.), 'Confirm') or contains(normalize-space(.), 'Verify')]")
 
-    def get_to(self) -> str:
-        el = self.wait.until(EC.presence_of_element_located(self.ADDRESS_TO))
-        return el.get_attribute("value") or ""
 
-    def click_call_a_taxi(self):
-        self.wait.until(EC.element_to_be_clickable(self.CALL_TAXI_BUTTON)).click()
+# --- Basic actions ---
+def set_from(self, address: str):
+helpers.wait_and_type(self.driver, self.ADDRESS_FROM, address, timeout=data.EXPLICIT_WAIT_SECONDS)
 
-    def select_supportive_plan(self):
-        self.wait.until(EC.element_to_be_clickable(self.SUPPORTIVE_PLAN)).click()
 
-    def get_selected_plan(self) -> str:
-        # try a direct selected title; if not, fall back to reading “Supportive” card aria/state
-        try:
-            el = self.wait.until(EC.visibility_of_element_located(self.SELECTED_TARIFF_TITLE))
-            text = (el.text or "").strip()
-            if text:
-                return text
-        except Exception:
-            pass
-        # fallback: if Supportive card is selected it often gets an “active/selected” state
-        card = self.wait.until(EC.presence_of_element_located(self.SUPPORTIVE_PLAN))
-        classes = (card.get_attribute("class") or "").lower()
-        aria = (card.get_attribute("aria-selected") or "").lower()
-        if "active" in classes or aria == "true":
-            return "Supportive"
-        return ""
+def set_to(self, address: str):
+helpers.wait_and_type(self.driver, self.ADDRESS_TO, address, timeout=data.EXPLICIT_WAIT_SECONDS)
 
-    # Phone flow
-    def click_phone_number(self):
-        self.wait.until(EC.element_to_be_clickable(self.PHONE_OPEN)).click()
 
-    def enter_phone_number(self, phone: str):
-        el = self.wait.until(EC.element_to_be_clickable(self.PHONE_INPUT))
-        el.clear()
-        el.send_keys(phone)
+def get_from(self) -> str:
+return helpers.get_value(self.driver, self.ADDRESS_FROM, timeout=data.EXPLICIT_WAIT_SECONDS)
 
-    def click_next(self):
-        self.wait.until(EC.element_to_be_clickable(self.NEXT_BTN)).click()
 
-    def enter_sms(self, code: str):
-        el = self.wait.until(EC.element_to_be_clickable(self.SMS_INPUT))
-        el.clear()
-        el.send_keys(code)
+def get_to(self) -> str:
+return helpers.get_value(self.driver, self.ADDRESS_TO, timeout=data.EXPLICIT_WAIT_SECONDS)
 
-    def click_confirm(self):
-        self.wait.until(EC.element_to_be_clickable(self.CONFIRM_BTN)).click()
 
-    def get_phone_number(self) -> str:
-        # After confirmation, most demos show the number back inside the phone widget.
-        # Try to read it from the same input (value) or a nearby text.
-        try:
-            el = self.wait.until(EC.presence_of_element_located(self.PHONE_INPUT))
-            val = (el.get_attribute("value") or "").strip()
-            if val:
-                return val
-        except Exception:
-            pass
-        # Generic fallback: first tel-looking input
-        try:
-            el = self.driver.find_element(By.XPATH, "//input[@type='tel']")
-            return (el.get_attribute("value") or "").strip()
-        except Exception:
-            return ""
+def click_call_a_taxi(self):
+helpers.wait_and_click(self.driver, self.CALL_TAXI_BUTTON, timeout=data.EXPLICIT_WAIT_SECONDS)
+
+
+# Tariff actions
+def click_supportive(self):
+helpers.wait_and_click(self.driver, self.SUPPORTIVE_PLAN, timeout=data.EXPLICIT_WAIT_SECONDS)
+
+
+self.click_supportive()
+
+
+def get_selected_plan(self) -> str:
+try:
+el = self.wait.until(EC.presence_of_element_located(self.ACTIVE_TARIFF_TITLE))
+return (el.text or el.get_attribute('textContent') or '').strip()
+except Exception:
+return ""
+
+
+# Phone / verification actions
+def click_phone_number(self):
+try:
+helpers.wait_and_click(self.driver, self.PHONE_OPEN, timeout=data.EXPLICIT_WAIT_SECONDS)
+except Exception:
+# Some variants open phone field automatically; that's OK.
+pass
+
+
+def enter_phone_number(self, phone: str):
+helpers.wait_and_type(self.driver, self.PHONE_INPUT, phone, timeout=data.EXPLICIT_WAIT_SECONDS)
+
+
+def click_next(self):
+helpers.wait_and_click(self.driver, self.NEXT_BUTTON, timeout=data.EXPLICIT_WAIT_SECONDS)
+
+
+def enter_sms(self, code: str):
+# If there are split inputs, type digit-by-digit; otherwise type into a single field.
+inputs = self.driver.find_elements(*self.SMS_INPUTS)
+if inputs and len(inputs) > 1:
+for i, ch in enumerate(code):
+if i < len(inputs):
+inputs[i].send_keys(ch)
+else:
+# fallback: try any focused element
+from selenium.webdriver.common.keys import Keys
+self.driver.switch_to.active_element.send_keys(code)
+
+
+def click_confirm(self):
+helpers.wait_and_click(self.driver, self.CONFIRM_BUTTON, timeout=data.EXPLICIT_WAIT_SECONDS)
+
+
+def get_phone_number(self) -> str:
+return helpers.get_value(self.driver, self.PHONE_INPUT, timeout=data.EXPLICIT_WAIT_SECONDS)
