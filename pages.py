@@ -1,115 +1,86 @@
-
-
 # pages.py
-# -----------------
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
+class RoutePage:
+    def __init__(self, driver, base_url):
+        self.driver = driver
+        self.wait = WebDriverWait(driver, 10)
+        self.base_url = base_url
 
-import data
-import helpers
+    # ---------- Locators (REPLACE with your project’s exact selectors) ----------
+    FROM_INPUT = (By.CSS_SELECTOR, "input[placeholder='From']")       # <-- update
+    TO_INPUT = (By.CSS_SELECTOR, "input[placeholder='To']")           # <-- update
+    CALL_TAXI_BUTTON = (By.CSS_SELECTOR, "button.call-taxi")          # <-- update
+    PHONE_INPUT = (By.CSS_SELECTOR, "input[type='tel']")              # <-- update
+    SUBMIT_PHONE = (By.CSS_SELECTOR, "button.submit-phone")           # <-- update
+    CODE_INPUT = (By.CSS_SELECTOR, "input[name='code']")              # <-- update
 
+    CARD_ADD_BUTTON = (By.CSS_SELECTOR, "button.add-card")            # <-- update
+    CARD_NUMBER_INPUT = (By.CSS_SELECTOR, "input[name='number']")     # <-- update
+    CARD_HOLDER_INPUT = (By.CSS_SELECTOR, "input[name='holder']")     # <-- update
+    CARD_MONTH_INPUT = (By.CSS_SELECTOR, "input[name='month']")       # <-- update
+    CARD_YEAR_INPUT = (By.CSS_SELECTOR, "input[name='year']")         # <-- update
+    CARD_CVC_INPUT = (By.CSS_SELECTOR, "input[name='cvc']")           # <-- update
+    SAVE_CARD_BUTTON = (By.CSS_SELECTOR, "button.save-card")          # <-- update
 
+    COMMENT_TEXTAREA = (By.CSS_SELECTOR, "textarea[name='comment']")  # <-- update
 
+    BLANKET_PLUS = (By.CSS_SELECTOR, "button.blanket-plus")           # <-- update
+    HANDKERCHIEF_PLUS = (By.CSS_SELECTOR, "button.handkerchief-plus") # <-- update
 
-class UrbanRoutesPage:
-def __init__(self, driver):
-self.driver = driver
-self.wait = WebDriverWait(driver, data.EXPLICIT_WAIT_SECONDS)
+    ICE_CREAM_PLUS = (By.CSS_SELECTOR, "button.ice-cream-plus")       # <-- update
+    ICE_CREAM_COUNTER = (By.CSS_SELECTOR, "span.ice-cream-count")     # <-- update
 
+    CAR_SEARCH_INPUT = (By.CSS_SELECTOR, "input[name='car-search']")  # <-- update
+    CAR_MODEL_RESULT = (By.XPATH, "//div[contains(@class,'car-model') and contains(., '{model}')]")  # <-- update
 
-# --- Locators ---
-ADDRESS_FROM = (By.ID, "from")
-ADDRESS_TO = (By.ID, "to")
+    # ---------- Actions ----------
+    def open(self):
+        self.driver.get(self.base_url)
 
+    def set_route(self, frm, to):
+        self.wait.until(EC.element_to_be_clickable(self.FROM_INPUT)).clear()
+        self.driver.find_element(*self.FROM_INPUT).send_keys(frm)
+        self.driver.find_element(*self.TO_INPUT).clear()
+        self.driver.find_element(*self.TO_INPUT).send_keys(to)
+        self.driver.find_element(*self.CALL_TAXI_BUTTON).click()
 
-CALL_TAXI_BUTTON = (By.XPATH, "//button[contains(normalize-space(.), 'Call a taxi')]")
+    def submit_phone_and_code(self, phone, code_fetcher):
+        self.wait.until(EC.element_to_be_clickable(self.PHONE_INPUT)).clear()
+        self.driver.find_element(*self.PHONE_INPUT).send_keys(phone)
+        self.driver.find_element(*self.SUBMIT_PHONE).click()
+        code = code_fetcher()
+        self.wait.until(EC.visibility_of_element_located(self.CODE_INPUT)).send_keys(code)
 
+    def add_card(self, number, holder, month, year, cvc):
+        self.wait.until(EC.element_to_be_clickable(self.CARD_ADD_BUTTON)).click()
+        self.wait.until(EC.visibility_of_element_located(self.CARD_NUMBER_INPUT)).send_keys(number)
+        self.driver.find_element(*self.CARD_HOLDER_INPUT).send_keys(holder)
+        self.driver.find_element(*self.CARD_MONTH_INPUT).send_keys(month)
+        self.driver.find_element(*self.CARD_YEAR_INPUT).send_keys(year)
+        self.driver.find_element(*self.CARD_CVC_INPUT).send_keys(cvc)
+        self.driver.find_element(*self.SAVE_CARD_BUTTON).click()
 
-# Tariff cards
-SUPPORTIVE_PLAN = (By.XPATH, "//div[normalize-space(text())='Supportive']/.. | //div[contains(@class,'tcard')][.//div[normalize-space(text())='Supportive']]")
-ACTIVE_TARIFF_TITLE = (By.XPATH, "//div[contains(@class,'tcard') and (contains(@class,'active') or contains(@class,'selected'))]//*[self::div or self::span][1]")
+    def add_comment_for_driver(self, text):
+        self.wait.until(EC.visibility_of_element_located(self.COMMENT_TEXTAREA)).clear()
+        self.driver.find_element(*self.COMMENT_TEXTAREA).send_keys(text)
 
+    def order_blanket_and_handkerchiefs(self, blanket_count=1, handkerchief_count=1):
+        for _ in range(blanket_count):
+            self.wait.until(EC.element_to_be_clickable(self.BLANKET_PLUS)).click()
+        for _ in range(handkerchief_count):
+            self.wait.until(EC.element_to_be_clickable(self.HANDKERCHIEF_PLUS)).click()
 
-# Phone / verification flow (generic selectors that work in many cohorts)
-PHONE_OPEN = (By.XPATH, "//button[.//span[contains(normalize-space(.), 'Phone')]] | //button[contains(normalize-space(.), 'Phone')]")
-PHONE_INPUT = (By.XPATH, "//input[@type='tel' or @name='phone' or contains(@aria-label,'phone')]")
-NEXT_BUTTON = (By.XPATH, "//button[contains(normalize-space(.), 'Next') or contains(normalize-space(.), 'Send')]")
-SMS_INPUTS = (By.XPATH, "//input[@inputmode='numeric' or @name='code' or contains(@aria-label,'code')]")
-CONFIRM_BUTTON = (By.XPATH, "//button[contains(normalize-space(.), 'Confirm') or contains(normalize-space(.), 'Verify')]")
+    def add_ice_creams(self, count=2):
+        for _ in range(count):
+            self.wait.until(EC.element_to_be_clickable(self.ICE_CREAM_PLUS)).click()
+        return self.driver.find_element(*self.ICE_CREAM_COUNTER).text
 
-
-# --- Basic actions ---
-def set_from(self, address: str):
-helpers.wait_and_type(self.driver, self.ADDRESS_FROM, address, timeout=data.EXPLICIT_WAIT_SECONDS)
-
-
-def set_to(self, address: str):
-helpers.wait_and_type(self.driver, self.ADDRESS_TO, address, timeout=data.EXPLICIT_WAIT_SECONDS)
-
-
-def get_from(self) -> str:
-return helpers.get_value(self.driver, self.ADDRESS_FROM, timeout=data.EXPLICIT_WAIT_SECONDS)
-
-
-def get_to(self) -> str:
-return helpers.get_value(self.driver, self.ADDRESS_TO, timeout=data.EXPLICIT_WAIT_SECONDS)
-
-
-def click_call_a_taxi(self):
-helpers.wait_and_click(self.driver, self.CALL_TAXI_BUTTON, timeout=data.EXPLICIT_WAIT_SECONDS)
-
-
-# Tariff actions
-def click_supportive(self):
-helpers.wait_and_click(self.driver, self.SUPPORTIVE_PLAN, timeout=data.EXPLICIT_WAIT_SECONDS)
-
-
-self.click_supportive()
-
-
-def get_selected_plan(self) -> str:
-try:
-el = self.wait.until(EC.presence_of_element_located(self.ACTIVE_TARIFF_TITLE))
-return (el.text or el.get_attribute('textContent') or '').strip()
-except Exception:
-return ""
-
-
-# Phone / verification actions
-def click_phone_number(self):
-try:
-helpers.wait_and_click(self.driver, self.PHONE_OPEN, timeout=data.EXPLICIT_WAIT_SECONDS)
-except Exception:
-# Some variants open phone field automatically; that's OK.
-pass
-
-
-def enter_phone_number(self, phone: str):
-helpers.wait_and_type(self.driver, self.PHONE_INPUT, phone, timeout=data.EXPLICIT_WAIT_SECONDS)
-
-
-def click_next(self):
-helpers.wait_and_click(self.driver, self.NEXT_BUTTON, timeout=data.EXPLICIT_WAIT_SECONDS)
-
-
-def enter_sms(self, code: str):
-# If there are split inputs, type digit-by-digit; otherwise type into a single field.
-inputs = self.driver.find_elements(*self.SMS_INPUTS)
-if inputs and len(inputs) > 1:
-for i, ch in enumerate(code):
-if i < len(inputs):
-inputs[i].send_keys(ch)
-else:
-# fallback: try any focused element
-from selenium.webdriver.common.keys import Keys
-self.driver.switch_to.active_element.send_keys(code)
-
-
-def click_confirm(self):
-helpers.wait_and_click(self.driver, self.CONFIRM_BUTTON, timeout=data.EXPLICIT_WAIT_SECONDS)
-
-
-def get_phone_number(self) -> str:
-return helpers.get_value(self.driver, self.PHONE_INPUT, timeout=data.EXPLICIT_WAIT_SECONDS)
+    def search_car_model(self, model):
+        self.wait.until(EC.visibility_of_element_located(self.CAR_SEARCH_INPUT)).clear()
+        self.driver.find_element(*self.CAR_SEARCH_INPUT).send_keys(model)
+        locator = (By.XPATH, self.CAR_MODEL_RESULT[1].format(model=model))
+        self.wait.until(EC.visibility_of_element_located(locator))
+        return True
