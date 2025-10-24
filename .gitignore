@@ -1,5 +1,21 @@
-.venv/
+# Python
 __pycache__/
+*.py[cod]
+*.pyo
 .pytest_cache/
+
+# Virtual envs
+.venv/
+venv/
+env/
+
+# IDE & OS
+.idea/
+.vscode/
 .DS_Store
+
+# Debug/output junk
+debug_*.html
+debug_*.png
+*.log
 *.zip
