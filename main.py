@@ -34,6 +34,8 @@ class TestUrbanRoutes:
         Step 2: Choose the supportive ride plan.
         """
         page = UrbanRoutesPage(self.driver)
+        # Optional: validate the label exists in TARIFFS
+        assert data.PLAN_SUPPORTIVE in data.TARIFFS
         page.select_plan(data.PLAN_SUPPORTIVE)
 
     def test_filling_in_phone_number(self):
@@ -41,7 +43,7 @@ class TestUrbanRoutes:
         Step 3: Fill in and confirm phone number.
         """
         page = UrbanRoutesPage(self.driver)
-        page.fill_phone_number(data.PHONE)
+        page.fill_phone_number(data.PHONE_NUMBER)
         code = helpers.retrieve_phone_code(self.driver)
         page.submit_phone_code(code)
 
@@ -54,7 +56,7 @@ class TestUrbanRoutes:
             data.CARD_NUMBER,
             data.CARD_NAME,
             data.CARD_EXP,
-            data.CARD_CVV
+            data.CARD_CODE
         )
 
     def test_message_for_driver(self):
@@ -62,7 +64,7 @@ class TestUrbanRoutes:
         Step 5: Send a short message for the driver.
         """
         page = UrbanRoutesPage(self.driver)
-        page.add_driver_message("Please call when you arrive.")
+        page.add_driver_message(data.MESSAGE_FOR_DRIVER)
 
     def test_ordering_blanket_and_handkerchiefs(self):
         """
@@ -73,10 +75,10 @@ class TestUrbanRoutes:
 
     def test_order_2_ice_creams(self):
         """
-        Step 7: Add 2 ice creams to the order.
+        Step 7: Add ice creams to the order.
         """
         page = UrbanRoutesPage(self.driver)
-        page.order_ice_creams(2)
+        page.order_ice_creams(data.ICE_CREAM_COUNT)
 
     def test_order_supportive_taxi(self):
         """
