@@ -1,79 +1,45 @@
-# helpers.py
-from urllib.request import Request, urlopen
-from urllib.error import URLError, HTTPError
-from typing import Optional
-import json
-import time
+# Retrieves Phone code. Do not change
+# File should be completely unchanged
 
-from selenium.common import WebDriverException
-from selenium.webdriver.remote.webdriver import WebDriver
+def retrieve_phone_code(driver) -> str:
+    """This code retrieves phone confirmation number and returns it as a string.
+    Use it when application waits for the confirmation code to pass it into your tests.
+    The phone confirmation code can only be obtained after it was requested in application."""
+    import json
+    import time
+    from selenium.common import WebDriverException
 
-
-def is_url_reachable(url: str, timeout: int = 5) -> bool:
-    """
-    Return True if a quick request to the URL succeeds (HTTP 2xx/3xx).
-    Uses a lightweight GET with a short timeout to avoid HEAD restrictions.
-    """
-    try:
-        req = Request(url, method="GET")
-        with urlopen(req, timeout=timeout) as resp:
-            return 200 <= resp.status < 400
-    except (HTTPError, URLError, TimeoutError):
-        return False
-
-
-def retrieve_phone_code(driver: WebDriver, attempts: int = 10, sleep_sec: float = 1.0) -> str:
-    """
-    Retrieve the phone confirmation code from Chrome performance logs.
-
-    The application emits a request like .../api/v1/number?number=...
-    We scan recent performance logs, pull the matching response body,
-    and extract all digits as the confirmation code.
-
-    Raises:
-        Exception if no confirmation code is found after retries.
-    """
-    code: Optional[str] = None
-
-    for _ in range(attempts):
+    code = None
+    for i in range(10):
         try:
             logs = [
-                entry["message"]
-                for entry in driver.get_log("performance")
-                if entry.get("message") and "api/v1/number?number" in entry.get("message", "")
+                log["message"]
+                for log in driver.get_log('performance')
+                if log.get("message") and 'api/v1/number?number' in log.get("message")
             ]
-
-            for raw in reversed(logs):
-                message_data = json.loads(raw)["message"]
-                request_id = message_data.get("params", {}).get("requestId")
-                if not request_id:
-                    continue
-
+            for log in reversed(logs):
+                message_data = json.loads(log)["message"]
                 body = driver.execute_cdp_cmd(
-                    "Network.getResponseBody",
-                    {"requestId": request_id}
+                    'Network.getResponseBody',
+                    {'requestId': message_data["params"]["requestId"]}
                 )
-                # Extract digits only (e.g., "Your code is 1234" -> "1234")
-                digits = "".join(ch for ch in body.get("body", "") if ch.isdigit())
-                if digits:
-                    code = digits
-                    break
-
-            if code:
-                return code
-
+                code = ''.join([x for x in body['body'] if x.isdigit()])
         except WebDriverException:
-            time.sleep(sleep_sec)
+            time.sleep(1)
             continue
+        if code:
+            break
 
-        time.sleep(sleep_sec)
+    if not code:
+        raise Exception("No phone confirmation code found.")
+    return code
 
-    raise Exception("No phone confirmation code found. Make sure the app requested a code first.")
 
-
-def clear_and_type(element, text: str) -> None:
-    """
-    Convenience helper to reliably clear an input and type text.
-    """
-    element.clear()
-    element.send_keys(text)
+def is_url_reachable(url: str) -> bool:
+    """Checks if the provided URL is reachable."""
+    import requests
+    try:
+        response = requests.get(url, timeout=5)
+        return response.status_code == 200
+    except requests.RequestException:
+        return False

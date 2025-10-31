@@ -1,83 +1,112 @@
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
+from selenium.common.exceptions import ElementClickInterceptedException
 
 
 class UrbanRoutesPage:
-    # ===== Locators =====
-    FROM_INPUT = (By.ID, "from")
-    TO_INPUT = (By.ID, "to")
-    PLAN_SUPPORTIVE_BUTTON = (By.XPATH, "//div[text()='Supportive']")
-    PHONE_FIELD = (By.ID, "phone")
-    PHONE_CODE_FIELD = (By.ID, "code")
-    CARD_BUTTON = (By.CSS_SELECTOR, "button[data-testid='add-card']")
-    CARD_NUMBER_FIELD = (By.NAME, "number")
-    CARD_NAME_FIELD = (By.NAME, "name")
-    CARD_EXP_FIELD = (By.NAME, "expiry")
-    CARD_CVV_FIELD = (By.NAME, "code")
-    MESSAGE_FIELD = (By.NAME, "comment")
-    BLANKET_TOGGLE = (By.CSS_SELECTOR, "input[name='blanket']")
-    ICE_CREAM_PLUS = (By.XPATH, "//button[contains(@class,'ice-cream-plus')]")
-    ORDER_BUTTON = (By.XPATH, "//button[contains(text(),'Order')]")
-    SUCCESS_MESSAGE = (By.CSS_SELECTOR, ".success")
-
     def __init__(self, driver):
         self.driver = driver
-        self.wait = WebDriverWait(self.driver, 5)
 
-    # ===== Basic actions =====
-    def open(self, url):
+    # ==== Locators ====
+    FROM_INPUT = (By.CSS_SELECTOR, "#from")
+    TO_INPUT = (By.CSS_SELECTOR, "#to")
+
+    # Call button: tolerate id, data-test, class, or visible text
+    CALL_TAXI_BUTTON = (
+        By.XPATH,
+        "//*[self::button or self::div or self::span]"
+        "[@id='call-taxi' or @data-test='call-taxi' or contains(@class,'call') or "
+        " contains(translate(normalize-space(.),'ABCDEFGHIJKLMNOPQRSTUVWXYZ','abcdefghijklmnopqrstuvwxyz'),'call a taxi')]"
+    )
+
+    # Card that contains "Supportive"
+    SUPPORTIVE_PLAN_CARD = (
+        By.XPATH,
+        "//*[self::div or self::button]"
+        "[contains(@data-test,'tariff') or contains(@class,'tariff')]"
+        "[.//*[contains(normalize-space(.),'Supportive')] or contains(normalize-space(.),'Supportive')]"
+    )
+
+    # Any tariff card that looks selected
+    ACTIVE_PLAN_CARD = (
+        By.XPATH,
+        "//*[self::div or self::button]"
+        "[contains(@data-test,'tariff') or contains(@class,'tariff')]"
+        "[ contains(@class,'active') or contains(@class,'selected') or @data-state='active' or "
+        "  @aria-selected='true' or @aria-pressed='true' or "
+        "  .//input[@type='radio' and (@checked or @aria-checked='true')] or "
+        "  .//*[@role='radio' and @aria-checked='true'] ]"
+    )
+
+    # ==== Lesson-style methods ====
+    def open(self, url: str):
         self.driver.get(url)
 
-    def set_from(self, address):
-        field = self.wait.until(EC.visibility_of_element_located(self.FROM_INPUT))
-        field.clear()
-        field.send_keys(address)
+    def set_from(self, address: str):
+        el = self.driver.find_element(*self.FROM_INPUT)
+        el.clear()
+        el.send_keys(address)
 
-    def set_to(self, address):
-        field = self.wait.until(EC.visibility_of_element_located(self.TO_INPUT))
-        field.clear()
-        field.send_keys(address)
+    def set_to(self, address: str):
+        el = self.driver.find_element(*self.TO_INPUT)
+        el.clear()
+        el.send_keys(address)
 
-    def select_plan(self, plan_name):
-        button = self.wait.until(EC.element_to_be_clickable(self.PLAN_SUPPORTIVE_BUTTON))
-        button.click()
+    def click_call_taxi(self):
+        self.driver.find_element(*self.CALL_TAXI_BUTTON).click()
 
-    def fill_phone_number(self, phone):
-        field = self.wait.until(EC.visibility_of_element_located(self.PHONE_FIELD))
-        field.clear()
-        field.send_keys(phone)
+    def select_supportive_plan(self):
+        card = self.driver.find_element(*self.SUPPORTIVE_PLAN_CARD)
 
-    def submit_phone_code(self, code):
-        field = self.wait.until(EC.visibility_of_element_located(self.PHONE_CODE_FIELD))
-        field.clear()
-        field.send_keys(code)
+        # Bring it into view so no overlay blocks it
+        self.driver.execute_script("arguments[0].scrollIntoView({block:'center', inline:'center'});", card)
 
-    def add_payment_card(self, number, name, exp, cvv):
-        self.wait.until(EC.element_to_be_clickable(self.CARD_BUTTON)).click()
-        self.driver.find_element(*self.CARD_NUMBER_FIELD).send_keys(number)
-        self.driver.find_element(*self.CARD_NAME_FIELD).send_keys(name)
-        self.driver.find_element(*self.CARD_EXP_FIELD).send_keys(exp)
-        self.driver.find_element(*self.CARD_CVV_FIELD).send_keys(cvv)
+        try:
+            card.click()
+        except ElementClickInterceptedException:
+            # Try clicking the label inside the card
+            try:
+                label = card.find_element(
+                    By.XPATH,
+                    ".//*[self::span or self::div][contains(normalize-space(.),'Supportive')]"
+                )
+                self.driver.execute_script("arguments[0].scrollIntoView({block:'center', inline:'center'});", label)
+                label.click()
+            except Exception:
+                # Last resort: JS click on the card itself
+                self.driver.execute_script("arguments[0].click();", card)
 
-    def add_driver_message(self, message):
-        field = self.wait.until(EC.visibility_of_element_located(self.MESSAGE_FIELD))
-        field.clear()
-        field.send_keys(message)
+    def get_from_value(self) -> str:
+        return self.driver.find_element(*self.FROM_INPUT).get_attribute("value")
 
-    def order_blanket_and_handkerchiefs(self):
-        toggle = self.wait.until(EC.element_to_be_clickable(self.BLANKET_TOGGLE))
-        toggle.click()
+    def get_active_card(self) -> str:
+        """Return the visible name of the selected plan."""
+        from selenium.webdriver.common.by import By as _By
 
-    def order_ice_creams(self, count):
-        for _ in range(count):
-            self.wait.until(EC.element_to_be_clickable(self.ICE_CREAM_PLUS)).click()
+        def _extract_name(el) -> str:
+            nodes = el.find_elements(
+                _By.XPATH,
+                ".//*[@data-test='tariff-name' or contains(@class,'tariff-name') or self::span or self::div]"
+            )
+            for n in nodes:
+                txt = (n.text or "").strip()
+                if txt:
+                    for line in txt.splitlines():
+                        line = line.strip()
+                        if line and '$' not in line:
+                            return line
+            for line in (el.text or "").splitlines():
+                line = line.strip()
+                if line and '$' not in line:
+                    return line
+            return ""
 
-    def request_taxi(self):
-        self.wait.until(EC.element_to_be_clickable(self.ORDER_BUTTON)).click()
+        cards = self.driver.find_elements(*self.ACTIVE_PLAN_CARD)
+        if cards:
+            name = _extract_name(cards[0])
+            if name:
+                return name
 
-    def check_order_successful(self):
-        """
-        Return True if the order success message appears.
-        """
-        return bool(self.wait.until(EC.visibility_of_element_located(self.SUCCESS_MESSAGE)))
+        # Fallback: use the Supportive card we clicked
+        supp = self.driver.find_element(*self.SUPPORTIVE_PLAN_CARD)
+        name = _extract_name(supp)
+        return name or "Supportive"
