@@ -1,0 +1,11 @@
+# Ignore environment, cache, and debug folders
+.venv/
+__pycache__/
+.pytest_cache/
+debug/
+*.log
+
+# Ignore backup/test files
+backup_before_*/
+tests/
+README.md
