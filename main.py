@@ -10,36 +10,42 @@ import data
 class TestUrbanRoutes:
     @classmethod
     def setup_class(cls):
-        """
-        Initialize the WebDriver once for all tests.
-        This version avoids the deprecated 'desired_capabilities'
-        argument so it works with newer Selenium versions too.
-        """
-        # basic Chrome driver; TripleTen runner will handle details
+        """Initialize a single WebDriver instance for all tests."""
         cls.driver = webdriver.Chrome()
         cls.wait = WebDriverWait(cls.driver, 10)
-
-        # Use the project URL from data.py
-        base_url = getattr(data, "URBAN_ROUTES_URL", None) or getattr(data, "BASE_URL", None)
-        assert base_url, "URBAN_ROUTES_URL or BASE_URL must be defined in data.py"
-
-        cls.base_url = base_url
+        cls.base_url = data.URBAN_ROUTES_URL
 
     @classmethod
     def teardown_class(cls):
+        """Quit the browser when all tests are finished."""
         cls.driver.quit()
-
-    def setup_method(self):
-        """Start each test from the main page."""
-        self.driver.get(self.base_url)
 
     @property
     def driver(self):
         return self.__class__.driver
 
-    def _page(self):
-        """Helper to get a fresh page object."""
+    def _page(self) -> UrbanRoutesPage:
+        """Return a fresh page-object instance bound to the shared driver."""
         return UrbanRoutesPage(self.driver)
+
+    # ----- Small flow helpers (not tests themselves) -----
+    def _go_to_supportive_taxi(self) -> UrbanRoutesPage:
+        """Open the site, build the route, and go to the Supportive tariff."""
+        page = self._page()
+        page.open(self.base_url)
+        page.set_from(data.ADDRESS_FROM)
+        page.set_to(data.ADDRESS_TO)
+        page.click_call_taxi()
+        page.choose_supportive()
+        return page
+
+    def _verify_phone(self, page: UrbanRoutesPage) -> None:
+        """Run the full phone-confirmation flow for the current page."""
+        page.fill_phone_number(data.PHONE_NUMBER)
+        page.click_phone_next()
+        code = helpers.retrieve_phone_code(self.driver)
+        page.fill_phone_code(code)
+        page.confirm_phone_code()
 
     # 1. Check setting route addresses
     def test_set_route(self):
@@ -53,118 +59,76 @@ class TestUrbanRoutes:
 
     # 2. Select the Supportive plan
     def test_select_supportive_plan(self):
-        page = self._page()
-        page.open(self.base_url)
-        page.set_from(data.ADDRESS_FROM)
-        page.set_to(data.ADDRESS_TO)
-        page.click_call_taxi()
-        page.choose_supportive()
-
-        assert page.is_supportive_selected()
+        page = self._go_to_supportive_taxi()
+        page.check_supportive_selected()
 
     # 3. Fill in phone number and confirm
     def test_filling_in_phone_number(self):
-        page = self._page()
-        page.open(self.base_url)
-        page.set_from(data.ADDRESS_FROM)
-        page.set_to(data.ADDRESS_TO)
-        page.click_call_taxi()
-        page.choose_supportive()
-
-        page.enter_phone(data.PHONE_NUMBER)
-        code = helpers.retrieve_phone_code(self.driver)
-        page.enter_sms_code(code)
-        page.click_confirm_phone()
-        # If something goes wrong, helpers or page methods should raise
+        page = self._go_to_supportive_taxi()
+        self._verify_phone(page)
+        # If something is wrong with the flow, the helper will raise an error.
 
     # 4. Add payment method (card)
     def test_adding_payment_method(self):
-        page = self._page()
-        page.open(self.base_url)
-        page.set_from(data.ADDRESS_FROM)
-        page.set_to(data.ADDRESS_TO)
-        page.click_call_taxi()
-        page.choose_supportive()
+        page = self._go_to_supportive_taxi()
+        self._verify_phone(page)
 
-        page.enter_phone(data.PHONE_NUMBER)
-        code = helpers.retrieve_phone_code(self.driver)
-        page.enter_sms_code(code)
-        page.click_confirm_phone()
-
-        page.add_card(data.CARD_NUMBER, data.CARD_CODE)
-        assert page.is_payment_card_active()
+        page.open_payment_form()
+        page.add_card(data.CARD_NUMBER, data.CARD_CODE, data.CARD_EXP, data.CARD_NAME)
+        page.save_card()
+        page.check_card_saved()
 
     # 5. Add a message for the driver
     def test_message_for_driver(self):
-        page = self._page()
-        page.open(self.base_url)
-        page.set_from(data.ADDRESS_FROM)
-        page.set_to(data.ADDRESS_TO)
-        page.click_call_taxi()
-        page.choose_supportive()
+        page = self._go_to_supportive_taxi()
+        self._verify_phone(page)
 
-        page.enter_phone(data.PHONE_NUMBER)
-        code = helpers.retrieve_phone_code(self.driver)
-        page.enter_sms_code(code)
-        page.click_confirm_phone()
-
-        page.leave_driver_comment(data.MESSAGE_FOR_DRIVER)
-        assert page.get_driver_comment_value() == data.MESSAGE_FOR_DRIVER
+        page.open_message_form()
+        page.set_message_for_driver(data.MESSAGE_FOR_DRIVER)
+        page.save_message()
+        page.check_message_saved(data.MESSAGE_FOR_DRIVER)
 
     # 6. Turn on blanket & handkerchiefs
     def test_ordering_blanket_and_handkerchiefs(self):
-        page = self._page()
-        page.open(self.base_url)
-        page.set_from(data.ADDRESS_FROM)
-        page.set_to(data.ADDRESS_TO)
-        page.click_call_taxi()
-        page.choose_supportive()
+        page = self._go_to_supportive_taxi()
+        self._verify_phone(page)
 
-        page.enter_phone(data.PHONE_NUMBER)
-        code = helpers.retrieve_phone_code(self.driver)
-        page.enter_sms_code(code)
-        page.click_confirm_phone()
-
-        page.add_card(data.CARD_NUMBER, data.CARD_CODE)
-        page.toggle_blanket_handkerchiefs()
-        assert page.is_blanket_checked()
+        page.open_requirements()
+        page.toggle_blanket_and_handkerchiefs(checked=True)
+        page.save_requirements()
+        page.check_blanket_and_handkerchiefs_selected()
 
     # 7. Order two ice creams
     def test_order_2_ice_creams(self):
-        page = self._page()
-        page.open(self.base_url)
-        page.set_from(data.ADDRESS_FROM)
-        page.set_to(data.ADDRESS_TO)
-        page.click_call_taxi()
-        page.choose_supportive()
+        page = self._go_to_supportive_taxi()
+        self._verify_phone(page)
 
-        page.enter_phone(data.PHONE_NUMBER)
-        code = helpers.retrieve_phone_code(self.driver)
-        page.enter_sms_code(code)
-        page.click_confirm_phone()
-
-        page.add_card(data.CARD_NUMBER, data.CARD_CODE)
-        page.add_ice_creams(count=2)
-        assert page.get_ice_cream_count() == 2
+        page.open_requirements()
+        page.set_ice_cream_count(data.ICE_CREAM_COUNT)
+        page.save_requirements()
+        page.check_ice_cream_count(data.ICE_CREAM_COUNT)
 
     # 8. Final supportive taxi order
     def test_order_supportive_taxi(self):
-        page = self._page()
-        page.open(self.base_url)
-        page.set_from(data.ADDRESS_FROM)
-        page.set_to(data.ADDRESS_TO)
-        page.click_call_taxi()
-        page.choose_supportive()
+        page = self._go_to_supportive_taxi()
+        self._verify_phone(page)
 
-        page.enter_phone(data.PHONE_NUMBER)
-        code = helpers.retrieve_phone_code(self.driver)
-        page.enter_sms_code(code)
-        page.click_confirm_phone()
+        # Payment
+        page.open_payment_form()
+        page.add_card(data.CARD_NUMBER, data.CARD_CODE, data.CARD_EXP, data.CARD_NAME)
+        page.save_card()
 
-        page.add_card(data.CARD_NUMBER, data.CARD_CODE)
-        page.leave_driver_comment(data.MESSAGE_FOR_DRIVER)
-        page.toggle_blanket_handkerchiefs()
-        page.add_ice_creams(count=2)
+        # Message for driver
+        page.open_message_form()
+        page.set_message_for_driver(data.MESSAGE_FOR_DRIVER)
+        page.save_message()
 
-        page.click_order()
-        assert page.is_car_search_modal_visible()
+        # Requirements (blanket + ice cream)
+        page.open_requirements()
+        page.toggle_blanket_and_handkerchiefs(checked=True)
+        page.set_ice_cream_count(data.ICE_CREAM_COUNT)
+        page.save_requirements()
+
+        # Final order
+        page.order_taxi()
+        page.check_taxi_ordered()
