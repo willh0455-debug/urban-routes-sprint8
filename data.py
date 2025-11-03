@@ -3,7 +3,7 @@
 # === Replace this URL with your live container URL ===
 # Example:
 # URBAN_ROUTES_URL = "https://cnt-3ddb7fb5-82ba-4f3f-a209-502a7b0ecd96.containerhub.tripleten-services.com/"
-URBAN_ROUTES_URL = "https://cnt-60faf62d-9521-4284-bfe9-518d98a04bef.containerhub.tripleten-services.com/"
+URBAN_ROUTES_URL = "https://cnt-3e0a5a0b-111d-472d-aeaa-451260e0ad23.containerhub.tripleten-services.com/"
 
 # === Tariffs (ride plans) ===
 # These are visible on the web app and used for plan selection.

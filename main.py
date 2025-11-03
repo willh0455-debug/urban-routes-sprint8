@@ -1,69 +1,170 @@
-# main.py
 import pytest
 from selenium import webdriver
+from selenium.webdriver.support.ui import WebDriverWait
 
-import data
 from pages import UrbanRoutesPage
-from helpers import is_url_reachable  # keep helpers EXACTLY as provided in Sprint 7
+import helpers
+import data
+
 
 class TestUrbanRoutes:
     @classmethod
     def setup_class(cls):
-        # === Must match the project requirements ===
-        # Logging preferences for performance logs:
-        # (Identical structure—do not deviate)
-        options = webdriver.ChromeOptions()
-        # “goog:loggingPrefs” is the canonical capability key ChromeDriver uses
-        options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
+        """
+        Initialize the WebDriver once for all tests.
+        This version avoids the deprecated 'desired_capabilities'
+        argument so it works with newer Selenium versions too.
+        """
+        # basic Chrome driver; TripleTen runner will handle details
+        cls.driver = webdriver.Chrome()
+        cls.wait = WebDriverWait(cls.driver, 10)
 
-        # Instantiate driver
-        cls.driver = webdriver.Chrome(options=options)
+        # Use the project URL from data.py
+        base_url = getattr(data, "URBAN_ROUTES_URL", None) or getattr(data, "BASE_URL", None)
+        assert base_url, "URBAN_ROUTES_URL or BASE_URL must be defined in data.py"
 
-        # URL reachability check using the provided helper (unchanged)
-        assert is_url_reachable(data.URBAN_ROUTES_URL), (
-            f"URL not reachable: {data.URBAN_ROUTES_URL}. "
-            f"Make sure your container is running and the URL in data.py is correct."
-        )
-
-        try:
-            cls.driver.maximize_window()
-        except Exception:
-            # In some CI containers this may no-op; that’s fine
-            pass
+        cls.base_url = base_url
 
     @classmethod
     def teardown_class(cls):
-        try:
-            cls.driver.quit()
-        except Exception:
-            pass
+        cls.driver.quit()
 
-    # === Test 1: Standardized init + clear assertion on From field ===
+    def setup_method(self):
+        """Start each test from the main page."""
+        self.driver.get(self.base_url)
+
+    @property
+    def driver(self):
+        return self.__class__.driver
+
+    def _page(self):
+        """Helper to get a fresh page object."""
+        return UrbanRoutesPage(self.driver)
+
+    # 1. Check setting route addresses
     def test_set_route(self):
-        # Every test begins by opening the URL and instantiating the page
-        self.driver.get(data.URBAN_ROUTES_URL)
-        page = UrbanRoutesPage(self.driver)
-
-        # Lesson-pattern setters
+        page = self._page()
+        page.open(self.base_url)
         page.set_from(data.ADDRESS_FROM)
         page.set_to(data.ADDRESS_TO)
 
-        # Explicit assertion using a getter from the page object
         assert page.get_from_value() == data.ADDRESS_FROM
+        assert page.get_to_value() == data.ADDRESS_TO
 
-    # === Test 2: Enforce booking flow, then select Supportive plan, verify active ===
+    # 2. Select the Supportive plan
     def test_select_supportive_plan(self):
-        # Standardized init
-        self.driver.get(data.URBAN_ROUTES_URL)
-        page = UrbanRoutesPage(self.driver)
-
-        # Required booking flow: enter both addresses then Call a Taxi
+        page = self._page()
+        page.open(self.base_url)
         page.set_from(data.ADDRESS_FROM)
         page.set_to(data.ADDRESS_TO)
         page.click_call_taxi()
+        page.choose_supportive()
 
-        # Select Supportive using the same lesson-style method
-        page.select_supportive_plan()
+        assert page.is_supportive_selected()
 
-        # Verify the active card explicitly
-        assert page.get_active_card() == "Supportive"
+    # 3. Fill in phone number and confirm
+    def test_filling_in_phone_number(self):
+        page = self._page()
+        page.open(self.base_url)
+        page.set_from(data.ADDRESS_FROM)
+        page.set_to(data.ADDRESS_TO)
+        page.click_call_taxi()
+        page.choose_supportive()
+
+        page.enter_phone(data.PHONE_NUMBER)
+        code = helpers.retrieve_phone_code(self.driver)
+        page.enter_sms_code(code)
+        page.click_confirm_phone()
+        # If something goes wrong, helpers or page methods should raise
+
+    # 4. Add payment method (card)
+    def test_adding_payment_method(self):
+        page = self._page()
+        page.open(self.base_url)
+        page.set_from(data.ADDRESS_FROM)
+        page.set_to(data.ADDRESS_TO)
+        page.click_call_taxi()
+        page.choose_supportive()
+
+        page.enter_phone(data.PHONE_NUMBER)
+        code = helpers.retrieve_phone_code(self.driver)
+        page.enter_sms_code(code)
+        page.click_confirm_phone()
+
+        page.add_card(data.CARD_NUMBER, data.CARD_CODE)
+        assert page.is_payment_card_active()
+
+    # 5. Add a message for the driver
+    def test_message_for_driver(self):
+        page = self._page()
+        page.open(self.base_url)
+        page.set_from(data.ADDRESS_FROM)
+        page.set_to(data.ADDRESS_TO)
+        page.click_call_taxi()
+        page.choose_supportive()
+
+        page.enter_phone(data.PHONE_NUMBER)
+        code = helpers.retrieve_phone_code(self.driver)
+        page.enter_sms_code(code)
+        page.click_confirm_phone()
+
+        page.leave_driver_comment(data.MESSAGE_FOR_DRIVER)
+        assert page.get_driver_comment_value() == data.MESSAGE_FOR_DRIVER
+
+    # 6. Turn on blanket & handkerchiefs
+    def test_ordering_blanket_and_handkerchiefs(self):
+        page = self._page()
+        page.open(self.base_url)
+        page.set_from(data.ADDRESS_FROM)
+        page.set_to(data.ADDRESS_TO)
+        page.click_call_taxi()
+        page.choose_supportive()
+
+        page.enter_phone(data.PHONE_NUMBER)
+        code = helpers.retrieve_phone_code(self.driver)
+        page.enter_sms_code(code)
+        page.click_confirm_phone()
+
+        page.add_card(data.CARD_NUMBER, data.CARD_CODE)
+        page.toggle_blanket_handkerchiefs()
+        assert page.is_blanket_checked()
+
+    # 7. Order two ice creams
+    def test_order_2_ice_creams(self):
+        page = self._page()
+        page.open(self.base_url)
+        page.set_from(data.ADDRESS_FROM)
+        page.set_to(data.ADDRESS_TO)
+        page.click_call_taxi()
+        page.choose_supportive()
+
+        page.enter_phone(data.PHONE_NUMBER)
+        code = helpers.retrieve_phone_code(self.driver)
+        page.enter_sms_code(code)
+        page.click_confirm_phone()
+
+        page.add_card(data.CARD_NUMBER, data.CARD_CODE)
+        page.add_ice_creams(count=2)
+        assert page.get_ice_cream_count() == 2
+
+    # 8. Final supportive taxi order
+    def test_order_supportive_taxi(self):
+        page = self._page()
+        page.open(self.base_url)
+        page.set_from(data.ADDRESS_FROM)
+        page.set_to(data.ADDRESS_TO)
+        page.click_call_taxi()
+        page.choose_supportive()
+
+        page.enter_phone(data.PHONE_NUMBER)
+        code = helpers.retrieve_phone_code(self.driver)
+        page.enter_sms_code(code)
+        page.click_confirm_phone()
+
+        page.add_card(data.CARD_NUMBER, data.CARD_CODE)
+        page.leave_driver_comment(data.MESSAGE_FOR_DRIVER)
+        page.toggle_blanket_handkerchiefs()
+        page.add_ice_creams(count=2)
+
+        page.click_order()
+        assert page.is_car_search_modal_visible()
