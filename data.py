@@ -1,13 +1,7 @@
 # data.py
 
 # === Replace this URL with your live container URL ===
-# Example:
-# URBAN_ROUTES_URL = "https://cnt-3ddb7fb5-82ba-4f3f-a209-502a7b0ecd96.containerhub.tripleten-services.com/"
 URBAN_ROUTES_URL = "https://cnt-58134e7b-2f3c-4f77-b0cf-5177847d655e.containerhub.tripleten-services.com/"
-
-# === Tariffs (ride plans) ===
-# These are visible on the web app and used for plan selection.
-TARIFFS = ("Business", "Sleepy", "Holiday", "Talking", "Supportive", "Glossy")
 
 # === Addresses ===
 ADDRESS_FROM = "East 2nd Street, 601"
@@ -22,9 +16,3 @@ CARD_CODE = "111"
 
 # === Additional order details ===
 MESSAGE_FOR_DRIVER = "Stop at the juice bar, please"
-ICE_CREAM_COUNT = 2
-
-# === Optional constants for convenience ===
-PLAN_SUPPORTIVE = "Supportive"
-CARD_NAME = "W HOWARD"
-CARD_EXP = "12/29"

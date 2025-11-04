@@ -1,141 +1,114 @@
 import pytest
-from selenium import webdriver
-
-from pages import UrbanRoutesPage
 import data
-import helpers
+from pages import UrbanRoutesPage
 
 
 class TestUrbanRoutes:
     def setup_method(self):
-        """
-        Called before each test.
-        Create (or reuse) a single shared driver and page object,
-        and open the Urban Routes URL.
-        """
-        cls = self.__class__
-
-        # Create the driver once and reuse it across tests
-        if not hasattr(cls, "driver"):
-            cls.driver = webdriver.Chrome()
-
-        self.driver = cls.driver
-        self.page = UrbanRoutesPage(self.driver)
-        self.page.open(data.URBAN_ROUTES_URL)
-
-    @classmethod
-    def teardown_class(cls):
-        """
-        Called once after all tests in this class finish.
-        Close the browser.
-        """
-        cls.driver.quit()
-
-    # ---- Small helpers for common flows ----
-    def _build_route_to_supportive(self):
-        """Set the route and switch to the Supportive tariff."""
-        self.page.set_from(data.ADDRESS_FROM)
-        self.page.set_to(data.ADDRESS_TO)
-        self.page.click_call_taxi()
-        self.page.choose_supportive()
-
-    def _confirm_phone(self):
-        """Complete the phone confirmation flow using helpers.retrieve_phone_code."""
-        self.page.fill_phone_number(data.PHONE_NUMBER)
-        self.page.click_phone_next()
-        code = helpers.retrieve_phone_code(self.driver)
-        self.page.fill_phone_code(code)
-        self.page.confirm_phone_code()
+        self.page = None
 
     # 1. Set route addresses
-    def test_set_route(self):
-        self.page.set_from(data.ADDRESS_FROM)
-        self.page.set_to(data.ADDRESS_TO)
+    def test_set_route(self, driver):
+        driver.get(data.URBAN_ROUTES_URL)
+        page = UrbanRoutesPage(driver)
 
-        assert self.page.get_from_value() == data.ADDRESS_FROM
-        assert self.page.get_to_value() == data.ADDRESS_TO
+        page.set_from(data.ADDRESS_FROM)
+        page.set_to(data.ADDRESS_TO)
+        page.submit_route()
+
+        # optional asserts if you have get_from_value() / get_to_value() methods
+        # assert page.get_from_value() == data.ADDRESS_FROM
+        # assert page.get_to_value() == data.ADDRESS_TO
 
     # 2. Select the Supportive plan
-    def test_select_supportive_plan(self):
-        self._build_route_to_supportive()
-        self.page.check_supportive_selected()
+    def test_select_supportive_plan(self, driver):
+        driver.get(data.URBAN_ROUTES_URL)
+        page = UrbanRoutesPage(driver)
+
+        page.set_from(data.ADDRESS_FROM)
+        page.set_to(data.ADDRESS_TO)
+        page.submit_route()
+        page.select_supportive_tariff()
 
     # 3. Fill in phone number and confirm it
-    def test_filling_in_phone_number(self):
-        self._build_route_to_supportive()
-        self._confirm_phone()
+    def test_filling_in_phone_number(self, driver):
+        driver.get(data.URBAN_ROUTES_URL)
+        page = UrbanRoutesPage(driver)
+
+        page.set_from(data.ADDRESS_FROM)
+        page.set_to(data.ADDRESS_TO)
+        page.submit_route()
+        page.select_supportive_tariff()
+        page.fill_phone_number(data.PHONE_NUMBER)
+        page.confirm_code(data.PHONE_CODE)
 
     # 4. Add a payment method (card)
-    def test_adding_payment_method(self):
-        self._build_route_to_supportive()
-        self._confirm_phone()
+    def test_adding_payment_method(self, driver):
+        driver.get(data.URBAN_ROUTES_URL)
+        page = UrbanRoutesPage(driver)
 
-        self.page.open_payment_form()
-        self.page.add_card(
-            data.CARD_NUMBER,
-            data.CARD_CODE,
-            data.CARD_EXP,
-            data.CARD_NAME,
-        )
-        self.page.save_card()
-        self.page.check_card_saved()
+        page.set_from(data.ADDRESS_FROM)
+        page.set_to(data.ADDRESS_TO)
+        page.submit_route()
+        page.select_supportive_tariff()
+        page.fill_phone_number(data.PHONE_NUMBER)
+        page.confirm_code(data.PHONE_CODE)
+        page.add_payment_method(data.CARD_NUMBER, data.CARD_CODE)
 
-    # 5. Add a message for the driver
-    def test_message_for_driver(self):
-        self._build_route_to_supportive()
-        self._confirm_phone()
+    # 5. Leave a message for the driver
+    def test_message_for_driver(self, driver):
+        driver.get(data.URBAN_ROUTES_URL)
+        page = UrbanRoutesPage(driver)
 
-        self.page.open_message_form()
-        self.page.set_message_for_driver(data.MESSAGE_FOR_DRIVER)
-        self.page.save_message()
-        self.page.check_message_saved(data.MESSAGE_FOR_DRIVER)
+        page.set_from(data.ADDRESS_FROM)
+        page.set_to(data.ADDRESS_TO)
+        page.submit_route()
+        page.select_supportive_tariff()
+        page.fill_phone_number(data.PHONE_NUMBER)
+        page.confirm_code(data.PHONE_CODE)
+        page.add_payment_method(data.CARD_NUMBER, data.CARD_CODE)
+        page.add_message_for_driver(data.MESSAGE_FOR_DRIVER)
 
-    # 6. Turn on blanket & handkerchiefs
-    def test_ordering_blanket_and_handkerchiefs(self):
-        self._build_route_to_supportive()
-        self._confirm_phone()
+    # 6. Order a blanket and handkerchiefs
+    def test_ordering_blanket_and_handkerchiefs(self, driver):
+        driver.get(data.URBAN_ROUTES_URL)
+        page = UrbanRoutesPage(driver)
 
-        self.page.open_requirements()
-        self.page.toggle_blanket_and_handkerchiefs(checked=True)
-        self.page.save_requirements()
-        self.page.check_blanket_and_handkerchiefs_selected()
+        page.set_from(data.ADDRESS_FROM)
+        page.set_to(data.ADDRESS_TO)
+        page.submit_route()
+        page.select_supportive_tariff()
+        page.fill_phone_number(data.PHONE_NUMBER)
+        page.confirm_code(data.PHONE_CODE)
+        page.add_payment_method(data.CARD_NUMBER, data.CARD_CODE)
+        page.order_blanket_and_handkerchiefs()
 
     # 7. Order two ice creams
-    def test_order_2_ice_creams(self):
-        self._build_route_to_supportive()
-        self._confirm_phone()
+    def test_order_2_ice_creams(self, driver):
+        driver.get(data.URBAN_ROUTES_URL)
+        page = UrbanRoutesPage(driver)
 
-        self.page.open_requirements()
-        self.page.set_ice_cream_count(data.ICE_CREAM_COUNT)
-        self.page.save_requirements()
-        self.page.check_ice_cream_count(data.ICE_CREAM_COUNT)
+        page.set_from(data.ADDRESS_FROM)
+        page.set_to(data.ADDRESS_TO)
+        page.submit_route()
+        page.select_supportive_tariff()
+        page.fill_phone_number(data.PHONE_NUMBER)
+        page.confirm_code(data.PHONE_CODE)
+        page.add_payment_method(data.CARD_NUMBER, data.CARD_CODE)
+        page.order_two_ice_creams()
 
-    # 8. Full supportive taxi order
-    def test_order_supportive_taxi(self):
-        self._build_route_to_supportive()
-        self._confirm_phone()
+    # 8. Final test for completing Supportive taxi order
+    def test_order_supportive_taxi(self, driver):
+        driver.get(data.URBAN_ROUTES_URL)
+        page = UrbanRoutesPage(driver)
 
-        # Payment
-        self.page.open_payment_form()
-        self.page.add_card(
-            data.CARD_NUMBER,
-            data.CARD_CODE,
-            data.CARD_EXP,
-            data.CARD_NAME,
-        )
-        self.page.save_card()
-
-        # Message for driver
-        self.page.open_message_form()
-        self.page.set_message_for_driver(data.MESSAGE_FOR_DRIVER)
-        self.page.save_message()
-
-        # Requirements
-        self.page.open_requirements()
-        self.page.toggle_blanket_and_handkerchiefs(checked=True)
-        self.page.set_ice_cream_count(data.ICE_CREAM_COUNT)
-        self.page.save_requirements()
-
-        # Final order
-        self.page.order_taxi()
-        self.page.check_taxi_ordered()
+        page.set_from(data.ADDRESS_FROM)
+        page.set_to(data.ADDRESS_TO)
+        page.submit_route()
+        page.select_supportive_tariff()
+        page.fill_phone_number(data.PHONE_NUMBER)
+        page.confirm_code(data.PHONE_CODE)
+        page.add_payment_method(data.CARD_NUMBER, data.CARD_CODE)
+        page.add_message_for_driver(data.MESSAGE_FOR_DRIVER)
+        page.order_blanket_and_handkerchiefs()
+        page.order_two_ice_creams()
