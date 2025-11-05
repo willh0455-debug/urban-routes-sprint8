@@ -1,5 +1,16 @@
+# === Ignore everything except required project files ===
+*
+!.gitignore
+!data.py
+!helpers.py
+!pages.py
+!main.py
+!README.md
+
+# === Explicitly ignore these common items ===
 __pycache__/
+*.pyc
 .venv/
 debug/
-*.png
-*.html
+pytest_cache/
+conftest.py
