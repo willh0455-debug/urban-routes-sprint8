@@ -87,15 +87,19 @@ class TestUrbanRoutes:
         page.set_to(data.ADDRESS_TO)
         page.click_call_taxi_button()
 
+        # Open the Add Card modal
         page.open_add_card_form()
+
+        # Fill card details using test data from data.py
         page.fill_card_details(
             data.CARD_NUMBER,
             data.CARD_CODE,
             data.CARD_EXP,
             data.CARD_HOLDER,
         )
-        page.save_card()
-        # (No extra assertion added here, per "no more, no less" and your notes.)
+
+        # Save the card and assert that the action succeeded
+        assert page.save_card() is True
 
     def test_message_for_driver(self):
         """Test 5: writing a comment for the driver."""
@@ -111,7 +115,6 @@ class TestUrbanRoutes:
         assert page.get_comment_value() == comment_text
 
     def test_ordering_blanket_and_handkerchiefs(self):
-        """Test 6: ordering a blanket and handkerchiefs."""
         self.driver.get(data.URBAN_ROUTES_URL)
         page = UrbanRoutesPage(self.driver)
 
@@ -119,14 +122,14 @@ class TestUrbanRoutes:
         page.set_to(data.ADDRESS_TO)
         page.click_call_taxi_button()
 
-        # Add missing step per reviewer:
+        # REQUIRED step
         page.select_supportive_tariff()
 
         page.toggle_blanket()
-        # (Assertion intentionally omitted per your notes; only the requested steps are added.)
+        # REQUIRED final assertion
+        assert page.is_blanket_selected()
 
     def test_order_2_ice_creams(self):
-        """Test 7: ordering two ice creams."""
         self.driver.get(data.URBAN_ROUTES_URL)
         page = UrbanRoutesPage(self.driver)
 
@@ -134,11 +137,12 @@ class TestUrbanRoutes:
         page.set_to(data.ADDRESS_TO)
         page.click_call_taxi_button()
 
-        # Add missing step per reviewer:
+        # REQUIRED step
         page.select_supportive_tariff()
 
         page.add_ice_cream(count=2)
-        # (Assertion intentionally omitted per your notes; only the requested steps are added.)
+        # REQUIRED final assertion
+        assert page.get_ice_cream_count() == 2
 
     def test_order_supportive_taxi(self):
         """Test 8: complete flow — ordering a taxi and checking car search popup."""

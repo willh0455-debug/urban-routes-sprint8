@@ -56,6 +56,7 @@ class UrbanRoutesPage:
 
     # Searching modal
     CAR_SEARCH_POPUP = (By.CSS_SELECTOR, '[data-testid="searching-car-modal"]')
+    CALL_TAXI_BUTTON = (By.XPATH, '//button[contains(normalize-space(),"Call taxi") or contains(normalize-space(),"Call a taxi")]')
 
     # === Payment/card modal ===
     PAYMENT_METHOD_BUTTON = (By.CSS_SELECTOR, ".pp-text")
@@ -328,11 +329,15 @@ class UrbanRoutesPage:
         button.click()
 
     def is_car_search_popup_displayed(self) -> bool:
-        """Dummy wait/flag for the popup (kept minimal as in your working version).”
-        """
-        time.sleep(3)
-        return True
-
+        """Wait briefly for the searching-car modal; return True/False."""
+        try:
+            WebDriverWait(self.driver, 5).until(
+                EC.visibility_of_element_located(self.CAR_SEARCH_POPUP)
+            )
+            return True
+        except TimeoutException:
+            return False
+    
     def wait_for_car_search_popup(self):
         self.wait.until(EC.visibility_of_element_located(self.CAR_SEARCH_POPUP))
 
@@ -358,8 +363,43 @@ class UrbanRoutesPage:
         strip = self.wait.until(EC.visibility_of_element_located(self.CARD_SIGNATURE_STRIP))
         strip.click()
 
-    def save_card(self):
-        link_button = self.wait.until(EC.element_to_be_clickable(self.LINK_CARD_BUTTON))
-        self.driver.execute_script("arguments[0].scrollIntoView({block:'center'});", link_button)
-        link_button.click()
-        time.sleep(1)
+    def save_card(self) -> bool:
+        """Click 'Link' to save the card. Return True if the click succeeded."""
+        try:
+            link_button = self.wait.until(EC.element_to_be_clickable(self.LINK_CARD_BUTTON))
+            self.driver.execute_script("arguments[0].scrollIntoView({block:'center'});", link_button)
+            link_button.click()
+            # Try to close the modal if a close button exists (non-fatal if it doesn't)
+            try:
+                close_btn = WebDriverWait(self.driver, 2).until(
+                    EC.element_to_be_clickable(self.CLOSE_PAYMENT_METHOD_MODAL_BUTTON)
+                )
+                close_btn.click()
+            except TimeoutException:
+                pass
+            return True
+        except Exception:
+            return False
+
+    def is_blanket_selected(self) -> bool:
+        """Detect if 'Blanket and handkerchiefs' is toggled on."""
+        try:
+            row = self.driver.find_element(
+                By.XPATH,
+                '//div[contains(text(),"Blanket and handkerchiefs")]/ancestor::div[contains(@class,"requirement")]'
+            )
+            toggle = row.find_element(By.CSS_SELECTOR, '[role="switch"], .switch, .checkbox, [data-testid="toggle"]')
+            cls = (toggle.get_attribute("class") or "").lower()
+            aria = (toggle.get_attribute("aria-checked") or "").lower()
+            return "active" in cls or "checked" in cls or aria == "true"
+        except Exception:
+            return False
+
+    def get_ice_cream_count(self) -> int:
+        """Read the current ice-cream counter next to the 'Ice cream' row."""
+        container = self.wait.until(EC.visibility_of_element_located(self.ICE_CREAM_CONTAINER))
+        cnt_text = container.find_element(*self.ICE_CREAM_COUNT).text.strip()
+        try:
+            return int(cnt_text)
+        except Exception:
+            return 0
