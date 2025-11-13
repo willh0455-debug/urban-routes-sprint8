@@ -12,7 +12,6 @@ class TestUrbanRoutes:
         """Standard setup from the Sprint 8 task."""
         options = Options()
         options.set_capability("goog:loggingPrefs", {"performance": "ALL"})
-
         cls.driver = webdriver.Chrome(options=options)
 
         # URL reachability check (must match requirements)
@@ -49,8 +48,11 @@ class TestUrbanRoutes:
         page.set_to(data.ADDRESS_TO)
         page.click_call_taxi_button()
 
+        # Add missing step per reviewer:
+        page.select_supportive_tariff()
+
         # Minimal requirement from feedback: assert against the "Supportive" text
-        assert "Supportive" in self.driver.page_source
+        assert "Supportive" in page.get_selected_tariff_text()
 
     def test_filling_in_phone_number(self):
         """Test 3: entering the phone and confirming via SMS code."""
@@ -93,9 +95,7 @@ class TestUrbanRoutes:
             data.CARD_HOLDER,
         )
         page.save_card()
-
-        # Optional: if you later expose a check in pages.py
-        # assert page.is_card_added()
+        # (No extra assertion added here, per "no more, no less" and your notes.)
 
     def test_message_for_driver(self):
         """Test 5: writing a comment for the driver."""
@@ -106,7 +106,6 @@ class TestUrbanRoutes:
         page.set_to(data.ADDRESS_TO)
         page.click_call_taxi_button()
 
-        # Use a simple hard-coded comment text
         comment_text = "Please call when you arrive"
         page.set_comment(comment_text)
         assert page.get_comment_value() == comment_text
@@ -120,9 +119,11 @@ class TestUrbanRoutes:
         page.set_to(data.ADDRESS_TO)
         page.click_call_taxi_button()
 
+        # Add missing step per reviewer:
+        page.select_supportive_tariff()
+
         page.toggle_blanket()
-        # Optional assertion if you later add it:
-        # assert page.is_blanket_selected()
+        # (Assertion intentionally omitted per your notes; only the requested steps are added.)
 
     def test_order_2_ice_creams(self):
         """Test 7: ordering two ice creams."""
@@ -133,9 +134,11 @@ class TestUrbanRoutes:
         page.set_to(data.ADDRESS_TO)
         page.click_call_taxi_button()
 
+        # Add missing step per reviewer:
+        page.select_supportive_tariff()
+
         page.add_ice_cream(count=2)
-        # Optional assertion:
-        # assert page.get_ice_cream_count() == 2
+        # (Assertion intentionally omitted per your notes; only the requested steps are added.)
 
     def test_order_supportive_taxi(self):
         """Test 8: complete flow — ordering a taxi and checking car search popup."""
@@ -147,11 +150,12 @@ class TestUrbanRoutes:
         page.set_to(data.ADDRESS_TO)
         page.click_call_taxi_button()
 
-        # (Optional) Select a specific tariff if needed.
-        # We skip this for now to avoid flaky locators.
+        # Add missing steps per reviewer:
+        page.select_supportive_tariff()
+        page.set_comment(data.MESSAGE_FOR_DRIVER)
 
         # Place the order
         page.click_order_button()
 
-        # REQUIRED: verify car search popup is displayed
+        # REQUIRED: verify car search popup is displayed (kept minimal per your prior version)
         assert page.is_car_search_popup_displayed()
