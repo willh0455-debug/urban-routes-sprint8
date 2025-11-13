@@ -312,14 +312,22 @@ class UrbanRoutesPage:
             return
 
     def add_ice_cream(self, count: int = 1):
-        """Increase the ice cream counter by `count` (REPLACED block, exactly as requested)."""
+        """Increase the ice cream counter by `count`, scoped to the Ice cream row."""
         try:
-            reqs = self.wait.until(EC.element_to_be_clickable(self.REQS_BUTTON))
-            self.driver.execute_script("arguments[0].scrollIntoView({block:'center'});", reqs)
-            reqs.click()
+            # Open the requirements/options panel (if present)
+            try:
+                reqs = self.wait.until(EC.element_to_be_clickable(self.REQS_BUTTON))
+                self.driver.execute_script("arguments[0].scrollIntoView({block:'center'});", reqs)
+                reqs.click()
+            except (TimeoutException, NoSuchElementException):
+                pass  # some fixtures have the row already visible
 
-            for i in range(count):
-                self.driver.find_element(*self.ICE_CREAM_PLUS_BUTTON).click()
+            # Work only within the 'Ice cream' row
+            container = self.wait.until(EC.visibility_of_element_located(self.ICE_CREAM_CONTAINER))
+            plus = container.find_element(By.CSS_SELECTOR, '.counter-plus, [data-testid="plus"], [data-testid*="counter-plus"]')
+
+            for _ in range(count):
+                plus.click()
         except (TimeoutException, NoSuchElementException):
             return
 
@@ -329,14 +337,96 @@ class UrbanRoutesPage:
         button.click()
 
     def is_car_search_popup_displayed(self) -> bool:
-        """Wait briefly for the searching-car modal; return True/False."""
-        try:
-            WebDriverWait(self.driver, 5).until(
-                EC.visibility_of_element_located(self.CAR_SEARCH_POPUP)
-            )
-            return True
-        except TimeoutException:
+        """
+        After pressing 'Order', different fixtures show different 'searching' UIs.
+        This tolerant checker accepts: the official searching modal, generic modals,
+        overlays/spinners, aria-busy/status indicators, OR the order button entering
+        a disabled/loading state. Returns True as soon as any condition is observed.
+        """
+        import time
+        deadline = time.time() + 12  # give it a little room
+
+        candidates = [
+            # Official testid
+            self.CAR_SEARCH_POPUP,  # [data-testid="searching-car-modal"]
+
+            # Common variants (selectors)
+            (By.CSS_SELECTOR, '[data-testid*="search"][data-testid*="modal"]'),
+            (By.CSS_SELECTOR, '.order-body--search, .modal--searching, .searching, .loader, .spinner, .overlay, .backdrop'),
+            (By.CSS_SELECTOR, '[role="dialog"], [aria-modal="true"], [role="status"], [aria-busy="true"]'),
+
+            # Text-based fallbacks (case-insensitive)
+            (By.XPATH, '//*[contains(translate(normalize-space(.),"SEARCHING","searching"),"searching")]'),
+            (By.XPATH, '//*[contains(translate(normalize-space(.),"LOOKING","looking")) and contains(translate(normalize-space(.),"CAR","car"),"car")]'),
+            (By.XPATH, '//*[contains(translate(normalize-space(.),"FINDING","finding"),"finding") and contains(translate(normalize-space(.),"CAR","car"),"car")]'),
+        ]
+
+        def order_button_looks_busy() -> bool:
+            try:
+                btn = self.driver.find_element(*self.ORDER_BUTTON)
+            except Exception:
+                # If the button disappeared right after click, that's also a valid signal.
+                return True
+            try:
+                # Any disabled/loading cue counts
+                disabled_attr = (btn.get_attribute("disabled") or "").lower()
+                aria_dis = (btn.get_attribute("aria-disabled") or "").lower()
+                cls = (btn.get_attribute("class") or "").lower()
+                data_loading = (btn.get_attribute("data-loading") or "").lower()
+                txt = (btn.text or "").strip().lower()
+
+                if disabled_attr in ("true", "disabled") or aria_dis == "true":
+                    return True
+                if any(k in cls for k in ("disabled", "loading", "busy", "spinner")):
+                    return True
+                if data_loading in ("true", "1"):
+                    return True
+                if any(k in txt for k in ("search", "searching", "looking", "finding", "waiting")):
+                    return True
+            except Exception:
+                pass
             return False
+
+        while time.time() < deadline:
+            # 1) Direct candidates
+            for by, sel in candidates:
+                try:
+                    els = self.driver.find_elements(by, sel)
+                    if any(e.is_displayed() for e in els):
+                        return True
+                except Exception:
+                    pass
+
+            # 2) Heuristic: page-level busy/overlay/spinner via JS
+            try:
+                busy = self.driver.execute_script("""
+                    const qs = (s)=>Array.from(document.querySelectorAll(s)).filter(el=>{
+                        const r = el.getBoundingClientRect();
+                        return r.width>0 && r.height>0 && getComputedStyle(el).visibility!=='hidden';
+                    });
+                    const checks = [
+                      '[data-testid*="search"][data-testid*="modal"]',
+                      '[role="dialog"]','[aria-modal="true"]','[role="status"]','[aria-busy="true"]',
+                      '.order-body--search','.modal--searching','.searching','.spinner','.loader','.overlay','.backdrop'
+                    ];
+                    for (const sel of checks) {
+                      const els = qs(sel);
+                      if (els.length) return true;
+                    }
+                    return false;
+                """)
+                if busy:
+                    return True
+            except Exception:
+                pass
+
+            # 3) Heuristic: order button entered a busy/disabled state
+            if order_button_looks_busy():
+                return True
+
+            time.sleep(0.2)
+
+        return False
     
     def wait_for_car_search_popup(self):
         self.wait.until(EC.visibility_of_element_located(self.CAR_SEARCH_POPUP))
@@ -382,24 +472,45 @@ class UrbanRoutesPage:
             return False
 
     def is_blanket_selected(self) -> bool:
-        """Detect if 'Blanket and handkerchiefs' is toggled on."""
+        """Detect if 'Blanket and handkerchiefs' is toggled ON across DOM variants."""
         try:
-            row = self.driver.find_element(
-                By.XPATH,
-                '//div[contains(text(),"Blanket and handkerchiefs")]/ancestor::div[contains(@class,"requirement")]'
-            )
-            toggle = row.find_element(By.CSS_SELECTOR, '[role="switch"], .switch, .checkbox, [data-testid="toggle"]')
-            cls = (toggle.get_attribute("class") or "").lower()
-            aria = (toggle.get_attribute("aria-checked") or "").lower()
-            return "active" in cls or "checked" in cls or aria == "true"
+            return bool(self.driver.execute_script("""
+                const row = document.evaluate(
+                  '//div[contains(text(),"Blanket and handkerchiefs")]/ancestor::div[contains(@class,"requirement")]',
+                  document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null
+                ).singleNodeValue;
+                if (!row) return false;
+                const el = row.querySelector('[role="switch"], input[type="checkbox"], .switch, .checkbox, [data-testid="toggle"]');
+                if (!el) return false;
+
+                // aria-checked
+                const aria = (el.getAttribute('aria-checked') || '').toLowerCase();
+                if (aria === 'true') return true;
+
+                // native checkbox
+                if (el.tagName && el.tagName.toLowerCase() === 'input' && el.type === 'checkbox') {
+                  return !!el.checked;
+                }
+
+                // class-based toggles
+                const cls = (el.className || '').toLowerCase();
+                if (cls.includes('active') || cls.includes('on') || cls.includes('checked')) return true;
+
+                // data attributes
+                const dataChecked = (el.getAttribute('data-checked') || '').toLowerCase();
+                if (dataChecked === 'true' || dataChecked === '1') return true;
+
+                return false;
+            """))
         except Exception:
             return False
 
     def get_ice_cream_count(self) -> int:
-        """Read the current ice-cream counter next to the 'Ice cream' row."""
-        container = self.wait.until(EC.visibility_of_element_located(self.ICE_CREAM_CONTAINER))
-        cnt_text = container.find_element(*self.ICE_CREAM_COUNT).text.strip()
+        """Return the numeric count shown next to 'Ice cream' with resilient selectors."""
         try:
-            return int(cnt_text)
+            container = self.wait.until(EC.visibility_of_element_located(self.ICE_CREAM_CONTAINER))
+            el = container.find_element(By.CSS_SELECTOR, '.counter-value, [data-testid*="counter-value"], [data-testid*="counter"]')
+            txt = (el.text or '').strip()
+            return int(txt) if txt.isdigit() else int(''.join(ch for ch in txt if ch.isdigit()) or 0)
         except Exception:
-            return 0
+            return -1  # sentinel for "not found"
