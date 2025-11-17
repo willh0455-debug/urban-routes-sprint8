@@ -2,9 +2,9 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 
 import data
-from helpers import is_url_reachable, retrieve_phone_code
+import helpers  # so we can call helpers.is_url_reachable
+from helpers import retrieve_phone_code
 from pages import UrbanRoutesPage
-from selenium.webdriver.support import expected_conditions as EC
 
 
 class TestUrbanRoutes:
@@ -16,11 +16,14 @@ class TestUrbanRoutes:
 
         cls.driver = webdriver.Chrome(options=options)
 
-        # URL reachability check (must match requirements)
-        assert is_url_reachable(
-            data.URBAN_ROUTES_URL
-        ), f"❌ Urban Routes server is unreachable: {data.URBAN_ROUTES_URL}"
-        print(f"✅ Urban Routes server is reachable: {data.URBAN_ROUTES_URL}")
+        # URL reachability check (informational, not a test assertion)
+        if helpers.is_url_reachable(data.URBAN_ROUTES_URL):
+            print("Connected to the Urban Routes server")
+        else:
+            print(
+                "Cannot connect to Urban Routes. "
+                "Check that the server is still on and running."
+            )
 
         cls.driver.maximize_window()
 
@@ -93,16 +96,11 @@ class TestUrbanRoutes:
         page.fill_card_details(
             data.CARD_NUMBER,
             data.CARD_CODE,
-            data.CARD_EXP,
-            data.CARD_HOLDER,
         )
         page.save_card()
 
-        # ASSERTION: the card modal is open (close button is visible)
-        close_btn = page.wait.until(
-            EC.visibility_of_element_located(page.CLOSE_PAYMENT_METHOD_MODAL_BUTTON)
-        )
-        assert close_btn.is_displayed()
+        # ASSERTION: payment method changed from "Cash" to "Card"
+        assert page.get_payment_option() == "Card"
 
     def test_message_for_driver(self):
         """Test 5: writing a comment for the driver."""
@@ -113,10 +111,8 @@ class TestUrbanRoutes:
         page.set_to(data.ADDRESS_TO)
         page.click_call_taxi_button()
 
-        # Use a simple hard-coded comment text
-        comment_text = "Please call when you arrive"
-        page.set_comment(comment_text)
-        assert page.get_comment_value() == comment_text
+        page.set_comment(data.MESSAGE_FOR_DRIVER)
+        assert page.get_comment_value() == data.MESSAGE_FOR_DRIVER
 
     def test_ordering_blanket_and_handkerchiefs(self):
         """Test 6: ordering a blanket and handkerchiefs."""
@@ -127,13 +123,11 @@ class TestUrbanRoutes:
         page.set_to(data.ADDRESS_TO)
         page.click_call_taxi_button()
 
-        # Select the Supportive tariff before changing options
         page.select_supportive_tariff()
-
         page.toggle_blanket()
 
-        # Tiny, non-brittle assertion so this test has a check
-        assert "Supportive" in page.get_selected_tariff_text()
+        # ASSERTION: blanket & handkerchiefs option is toggled on
+        assert page.is_checked()
 
     def test_order_2_ice_creams(self):
         """Test 7: ordering two ice creams."""
@@ -144,13 +138,11 @@ class TestUrbanRoutes:
         page.set_to(data.ADDRESS_TO)
         page.click_call_taxi_button()
 
-        # Select the Supportive tariff before changing options
         page.select_supportive_tariff()
-
         page.add_ice_cream(count=2)
 
-        # Tiny, non-brittle assertion so this test has a check
-        assert "Supportive" in page.get_selected_tariff_text()
+        # ASSERTION: ice cream counter shows 2
+        assert page.get_ice_cream_count() == "2"
 
     def test_order_supportive_taxi(self):
         """Test 8: complete flow — ordering a taxi and checking car search popup."""
@@ -170,4 +162,4 @@ class TestUrbanRoutes:
         page.click_order_button()
 
         # REQUIRED: verify car search popup is displayed
-        assert page.is_car_search_popup_displayed()
+        assert page.wait_for_car_search_popup()
