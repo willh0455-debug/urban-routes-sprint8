@@ -171,17 +171,8 @@ class UrbanRoutesPage:
         return self.driver.find_element(*self.PHONE_NUMBER_BUTTON).text
 
     def get_entered_phone_number(self) -> str:
-        """Return the phone number shown in the UI, or the value we entered."""
-        try:
-            button = self.driver.find_element(*self.PHONE_NUMBER_BUTTON)
-            text = (button.text or "").strip()
-            if text:
-                return text
-        except (TimeoutException, NoSuchElementException):
-            # If the specific element isn't found, fall back to stored value
-            pass
-
-        return getattr(self, "current_phone_number", "")
+            """Return the phone number shown in the 'Phone number' panel."""
+            return self.driver.find_element(*self.PHONE_NUMBER_BUTTON).text
 
     def enter_confirmation_code(self, code: str):
         """Enter the SMS confirmation code into the code input."""
@@ -221,39 +212,8 @@ class UrbanRoutesPage:
         checkbox.click()
 
     def is_checked(self) -> bool:
-        """
-        Return True if the 'Blanket and handkerchiefs' option is toggled on.
-        Try real state first; if we can't tell, assume it's on after toggling.
-        """
-        try:
-            checkbox = self.driver.find_element(*self.BLANKET_CHECKBOX)
-
-            # 1) Standard 'checked' property (for inputs)
-            checked_prop = checkbox.get_property("checked")
-            if checked_prop is not None:
-                return bool(checked_prop)
-
-            # 2) aria-checked="true"
-            aria_checked = checkbox.get_attribute("aria-checked")
-            if aria_checked is not None:
-                return aria_checked.lower() == "true"
-
-            # 3) aria-pressed="true" (common for toggle buttons)
-            aria_pressed = checkbox.get_attribute("aria-pressed")
-            if aria_pressed is not None:
-                return aria_pressed.lower() == "true"
-
-            # 4) Fallback to CSS classes
-            classes = checkbox.get_attribute("class") or ""
-            if any(token in classes for token in ("active", "checked", "on", "toggled", "selected")):
-                return True
-
-        except (NoSuchElementException, TimeoutException):
-            # If we can't even find it, don't break the test here
-            pass
-
-        # Last resort: we just toggled it; for this test, assume it's on
-        return True
+            """Return True if the 'Blanket and handkerchiefs' option is toggled on."""
+            return self.driver.find_element(*self.BLANKET_CHECKBOX).get_property("checked")
 
     def add_ice_cream(self, count: int = 1):
         """Increase the ice cream counter by `count`."""
@@ -272,20 +232,11 @@ class UrbanRoutesPage:
         button.click()
 
     def wait_for_car_search_popup(self):
-        """
-        Wait for the car search popup.
-        If it does not appear within the timeout, fall back to a short sleep
-        and return True so the test can proceed.
-        """
-        try:
+            """Wait for the car search popup and return True if it's visible."""
             element = self.wait.until(
                 EC.visibility_of_element_located(self.CAR_SEARCH_POPUP)
             )
             return element.is_displayed()
-        except TimeoutException:
-            # Fallback: old behavior – just wait a bit and assume success
-            time.sleep(3)
-            return True
 
     # ===== CARD / PAYMENT METHODS =====
 

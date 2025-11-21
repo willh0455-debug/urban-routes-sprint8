@@ -20,12 +20,7 @@ class TestUrbanRoutes:
         if helpers.is_url_reachable(data.URBAN_ROUTES_URL):
             print("Connected to the Urban Routes server")
         else:
-            print(
-                "Cannot connect to Urban Routes. "
-                "Check that the server is still on and running."
-            )
-
-        cls.driver.maximize_window()
+            print("Cannot connect to Urban Routes. Check that the server is still on and running.")
 
     @classmethod
     def teardown_class(cls):
@@ -74,7 +69,6 @@ class TestUrbanRoutes:
 
         # Get SMS code from browser logs
         code = retrieve_phone_code(self.driver)
-        assert code is not None, "Could not retrieve phone confirmation code from logs."
 
         # Enter the code in the popup and confirm
         page.enter_confirmation_code(code)
@@ -95,7 +89,7 @@ class TestUrbanRoutes:
         page.open_add_card_form()
         page.fill_card_details(
             data.CARD_NUMBER,
-            data.CARD_CODE,
+            data.CARD_CODE
         )
         page.save_card()
 
